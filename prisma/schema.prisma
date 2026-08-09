@@ -1,0 +1,285 @@
+// Agency CRM — Prisma schema
+// SQLite has no native enum type, so status/type fields are Strings backed by
+// shared TypeScript union types + zod validators (see src/lib/constants.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Team
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      String   @default("MEMBER") // ADMIN | MEMBER
+  color     String   @default("#6366f1") // avatar accent color
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedLeads         Lead[]        @relation("LeadAssignee")
+  activities            Activity[]    @relation("ActivityCreatedBy")
+  videographerProjects  Project[]     @relation("ProjectVideographer")
+  photographerProjects  Project[]     @relation("ProjectPhotographer")
+  editorProjects        Project[]     @relation("ProjectEditor")
+  editorDeliverables    Deliverable[] @relation("DeliverableEditor")
+}
+
+// ---------------------------------------------------------------------------
+// Shared catalogs
+// ---------------------------------------------------------------------------
+
+model Service {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  leads   Lead[]   @relation("LeadServices")
+  clients Client[] @relation("ClientServices")
+}
+
+model PipelineStage {
+  id        String   @id @default(cuid())
+  name      String
+  order     Int
+  color     String   @default("#6366f1")
+  isWon     Boolean  @default(false)
+  isLost    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leads Lead[]
+}
+
+model DeliverableStatusOption {
+  id         String   @id @default(cuid())
+  name       String
+  order      Int
+  color      String   @default("#6366f1")
+  isTerminal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  deliverables Deliverable[]
+}
+
+// ---------------------------------------------------------------------------
+// CRM: Leads & Pipeline
+// ---------------------------------------------------------------------------
+
+model Lead {
+  id              String    @id @default(cuid())
+  companyName     String
+  contactName     String
+  email           String?
+  phone           String?
+  instagram       String?
+  website         String?
+  industry        String?
+  location        String?
+  source          String?
+  estimatedValue  Float?
+  notes           String?
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+  order           Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  stage   PipelineStage @relation(fields: [stageId], references: [id])
+  stageId String
+
+  assignedTo   User?   @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  assignedToId String?
+
+  services Service[] @relation("LeadServices")
+
+  activities Activity[]
+
+  client Client?
+
+  @@index([stageId])
+  @@index([assignedToId])
+}
+
+// ---------------------------------------------------------------------------
+// Clients
+// ---------------------------------------------------------------------------
+
+model Client {
+  id              String    @id @default(cuid())
+  companyName     String
+  mainContactName String
+  email           String?
+  phone           String?
+  instagram       String?
+  website         String?
+  monthlyRetainer Float?
+  contractStart   DateTime?
+  contractEnd     DateTime?
+  paymentStatus   String    @default("CURRENT") // CURRENT | OVERDUE | PAUSED
+  status          String    @default("ACTIVE") // ACTIVE | PAUSED | CHURNED
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  fromLead   Lead?   @relation(fields: [fromLeadId], references: [id])
+  fromLeadId String? @unique
+
+  services Service[] @relation("ClientServices")
+
+  projects     Project[]
+  deliverables Deliverable[]
+  invoices     Invoice[]
+  activities   Activity[]
+  retainer     Retainer?
+}
+
+// ---------------------------------------------------------------------------
+// Projects & Shoots
+// ---------------------------------------------------------------------------
+
+model Project {
+  id            String    @id @default(cuid())
+  name          String
+  shootDate     DateTime?
+  shootTime     String?
+  shootLocation String?
+  projectType   String?
+  status        String    @default("PLANNING")
+  deadline      DateTime?
+  internalNotes String?
+  clientNotes   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  videographer   User?   @relation("ProjectVideographer", fields: [videographerId], references: [id])
+  videographerId String?
+
+  photographer   User?   @relation("ProjectPhotographer", fields: [photographerId], references: [id])
+  photographerId String?
+
+  editor   User?   @relation("ProjectEditor", fields: [editorId], references: [id])
+  editorId String?
+
+  deliverables Deliverable[]
+
+  @@index([clientId])
+  @@index([shootDate])
+}
+
+// ---------------------------------------------------------------------------
+// Deliverables
+// ---------------------------------------------------------------------------
+
+model Deliverable {
+  id             String    @id @default(cuid())
+  contentType    String // REEL | TIKTOK | YOUTUBE_VIDEO | PHOTOGRAPHY | AD_CREATIVE | SOCIAL_POST | OTHER
+  customTypeName String?
+  deadline       DateTime?
+  revisionCount  Int       @default(0)
+  approvalStatus String    @default("PENDING") // PENDING | APPROVED | REJECTED | REVISIONS_REQUESTED
+  deliveryLink   String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectId String?
+
+  assignedEditor   User?   @relation("DeliverableEditor", fields: [assignedEditorId], references: [id])
+  assignedEditorId String?
+
+  status   DeliverableStatusOption @relation(fields: [statusId], references: [id])
+  statusId String
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([statusId])
+}
+
+// ---------------------------------------------------------------------------
+// Retainers
+// ---------------------------------------------------------------------------
+
+model Retainer {
+  id                   String    @id @default(cuid())
+  monthlyRetainer      Float
+  shootsIncluded       Int       @default(0)
+  videosIncluded       Int       @default(0)
+  photosIncluded       Int       @default(0)
+  shootsUsed           Int       @default(0)
+  videosUsed           Int       @default(0)
+  photosUsed           Int       @default(0)
+  nextShootDate        DateTime?
+  nextPaymentDate      DateTime?
+  renewalDate          DateTime?
+  servicesIncludedText String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String @unique
+}
+
+// ---------------------------------------------------------------------------
+// Finance
+// ---------------------------------------------------------------------------
+
+model Invoice {
+  id          String    @id @default(cuid())
+  amount      Float
+  type        String    @default("ONE_OFF") // RETAINER | ONE_OFF | PROJECT
+  status      String    @default("DRAFT") // DRAFT | SENT | DUE | PAID | OVERDUE
+  issueDate   DateTime?
+  dueDate     DateTime?
+  paidDate    DateTime?
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  @@index([clientId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Activities & Follow-ups
+// ---------------------------------------------------------------------------
+
+model Activity {
+  id          String    @id @default(cuid())
+  type        String // CALL | EMAIL | INSTAGRAM_DM | WHATSAPP | MEETING | PROPOSAL | FOLLOW_UP | NOTE
+  subject     String?
+  notes       String?
+  dueAt       DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId String?
+
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String?
+
+  createdBy   User?   @relation("ActivityCreatedBy", fields: [createdById], references: [id])
+  createdById String?
+
+  @@index([leadId])
+  @@index([clientId])
+  @@index([dueAt])
+}
