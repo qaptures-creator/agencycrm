@@ -19,13 +19,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Deploying
 
-There are no migration files checked in yet (`prisma/migrations` is empty) — `npx prisma db push` syncs the schema directly. `npm run build` no longer runs migrations itself; the deploy platform's build command should apply the schema before building:
+There are no migration files checked in yet (`prisma/migrations` is empty) — `npx prisma db push` syncs the schema directly. Schema sync has to run at **deploy/start time, not build time**: most platforms (Railway included) build in an isolated environment with no network access to other services, so a database connection during the build step will fail with `P1001: Can't reach database server`. The database is only reachable once the container actually starts.
 
-```
-npx prisma db push && npm run build
-```
+`railway.json` reflects this split:
 
-`railway.json` already sets this as the build command for Railway. Once you start committing migrations (`npx prisma migrate dev --name <name>`), switch that build command to `npx prisma migrate deploy && npm run build` instead.
+- **Build command:** `npm run build` (just `prisma generate && next build` — no DB connection needed)
+- **Start command:** `npx prisma db push && npm run start` (schema sync runs here, when the private network to Postgres is up)
+
+Once you start committing migrations (`npx prisma migrate dev --name <name>`), swap `db push` for `prisma migrate deploy` in the start command.
 
 ## What's included
 
