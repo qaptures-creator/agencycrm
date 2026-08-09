@@ -1,13 +1,15 @@
 // Agency CRM — Prisma schema
-// SQLite has no native enum type, so status/type fields are Strings backed by
-// shared TypeScript union types + zod validators (see src/lib/constants.ts).
+// Status/type fields are Strings (not native enums) because several of them
+// (pipeline stages, deliverable statuses) are user-customizable at runtime —
+// backed by shared TypeScript union types + zod validators where they aren't
+// (see src/lib/constants.ts).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

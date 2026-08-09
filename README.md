@@ -2,23 +2,30 @@
 
 A complete CRM and agency management system for a video marketing agency — leads, clients, shoots, content deliverables, retainers, invoicing and performance analytics in one dashboard.
 
-Built with Next.js (App Router), TypeScript, Prisma + SQLite, Tailwind CSS, and Radix UI primitives. No demo data is seeded — only structural defaults (pipeline stages, deliverable statuses, and your own team member record).
+Built with Next.js (App Router), TypeScript, Prisma + PostgreSQL, Tailwind CSS, and Radix UI primitives. No demo data is seeded — only structural defaults (pipeline stages, deliverable statuses, and your own team member record).
 
 ## Getting started
 
+Point `DATABASE_URL` in `.env` (copy from `.env.example`) at a Postgres database — local, Docker, or a hosted instance (Railway, Neon, Supabase, RDS, etc). Then:
+
 ```bash
 npm install
+npx prisma db push
+npm run db:seed
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-On first install, Prisma generates the client and creates `prisma/dev.db` (a local SQLite file). To (re)apply the schema and seed system defaults:
+## Deploying
 
-```bash
-npx prisma migrate dev
-npm run db:seed
+There are no migration files checked in yet (`prisma/migrations` is empty) — `npx prisma db push` syncs the schema directly. `npm run build` no longer runs migrations itself; the deploy platform's build command should apply the schema before building:
+
 ```
+npx prisma db push && npm run build
+```
+
+`railway.json` already sets this as the build command for Railway. Once you start committing migrations (`npx prisma migrate dev --name <name>`), switch that build command to `npx prisma migrate deploy && npm run build` instead.
 
 ## What's included
 
@@ -45,7 +52,7 @@ Client → Retainer
 Client → Invoices
 ```
 
-SQLite has no native enum type, so status/type fields are plain strings backed by shared TypeScript unions in `src/lib/constants.ts`. Swap the `DATABASE_URL` in `.env` (and the `datasource` provider in `schema.prisma`) to point at Postgres/MySQL for production use — the schema was written to be provider-portable.
+Status/type fields are plain strings backed by shared TypeScript unions in `src/lib/constants.ts` rather than native Postgres enums, since several of them (pipeline stages, deliverable statuses) are user-customizable at runtime via Settings.
 
 ## Project structure
 
