@@ -13,7 +13,7 @@ import {
 import { StatCard } from "@/components/stat-card";
 import { ChartCard } from "@/components/charts/chart-card";
 import { RevenueAreaChart } from "@/components/charts/revenue-area-chart";
-import { HorizontalBarChart } from "@/components/charts/horizontal-bar-chart";
+import { RevenueByPlanChart } from "./revenue-by-plan-chart";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { GymStatusBadge } from "@/components/gym/status-badge";
@@ -138,7 +138,7 @@ export default async function FinancesPage({
               emptyIcon={BarChart3}
               emptyMessage="No active memberships assigned to a plan yet."
             >
-              <HorizontalBarChart data={revenueByPlan} dataKey="monthlyRevenue" nameKey="name" valueFormatter={(v) => moneyGBP(v)} />
+              <RevenueByPlanChart data={revenueByPlan} />
             </ChartCard>
           </div>
 
