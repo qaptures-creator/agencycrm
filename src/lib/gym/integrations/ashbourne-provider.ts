@@ -2,39 +2,51 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Contract for Muscle Massacre's membership/payment provider, Ashbourne
- * Membership Management. Ashbourne is the source of truth for membership
- * and financial data once connected — this CRM's Members/Memberships/
- * Finance/Payments UI is built to read through this interface rather than
- * duplicate Ashbourne's data model.
+ * Contract for connecting to Ashbourne Membership Management — the gym's real
+ * membership/payment system. There is currently NO authorised API/export/
+ * webhook access to Ashbourne. Nothing in this codebase should ever fabricate
+ * a connection, invented members, or invented revenue.
  *
- * No authorised API, export, or webhook integration has been set up yet
- * (no scraping, no reverse-engineered endpoints, no fabricated data — see
- * Settings → Integrations → Ashbourne). Until it is, the CRM's own
- * database (GymMember / GymMembership / GymPayment, entered manually or via
- * CSV import) is the only source of truth, and it's clearly a manual
- * fallback rather than a live sync.
- *
- * Implement this interface (e.g. AshbourneApiProvider) once Ashbourne
- * documentation or credentials are available, and swap it in via
+ * All Members/Memberships/Finance/Payments pages read only from this CRM's
+ * own database (GymMember, GymMembership, GymPayment), populated by real
+ * manual entry (or later, CSV import, or later still, a genuine Ashbourne
+ * sync). When credentials/API access become available, implement this
+ * interface (e.g. AshbourneApiProvider) and swap it in via
  * getMembershipProvider() below.
  */
 export interface MembershipProvider {
-  getMembers(): Promise<unknown[]>;
-  getMemberships(): Promise<unknown[]>;
-  getTransactions(params: { since?: Date }): Promise<unknown[]>;
-  getFailedPayments(): Promise<unknown[]>;
-  getRevenueSummary(params: { from: Date; to: Date }): Promise<{ total: number }>;
+  listMembers(params?: { since?: Date }): Promise<AshbourneMemberRecord[]>;
+  listPayments(params?: { since?: Date }): Promise<AshbournePaymentRecord[]>;
+  syncMember(memberId: string): Promise<void>;
 }
+
+export type AshbourneMemberRecord = {
+  externalId: string;
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  planName: string | null;
+  status: string;
+};
+
+export type AshbournePaymentRecord = {
+  externalId: string;
+  memberExternalId: string;
+  amount: number;
+  date: Date;
+  status: string;
+};
 
 export async function isAshbourneConnected(): Promise<boolean> {
   const integration = await prisma.gymIntegration.findUnique({ where: { provider: "ASHBOURNE" } });
   return integration?.status === "CONNECTED";
 }
 
-/** Returns null until Ashbourne is genuinely connected — never fabricate a provider. */
+/** Returns null until a real provider is connected — callers must handle the
+ * "Not Connected" state (showing manually-entered data only) rather than
+ * assuming a provider always exists. */
 export async function getMembershipProvider(): Promise<MembershipProvider | null> {
   const connected = await isAshbourneConnected();
   if (!connected) return null;
-  throw new Error("No AshbourneMembershipProvider implementation is registered yet.");
+  throw new Error("No MembershipProvider implementation is registered yet.");
 }
