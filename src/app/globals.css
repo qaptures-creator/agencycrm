@@ -175,3 +175,79 @@
     background: transparent;
   }
 }
+
+/* ===========================================================================
+   MUSCLE MASSACRE — Gym CRM theme
+   Always-dark, purple-accented, industrial. Scoped under .gym-theme so it
+   never touches the Agency CRM's tokens above. Re-uses the same variable
+   names / utility classes (bg-background, text-foreground, bg-primary, ...)
+   so every shared ui/* primitive re-skins automatically.
+   =========================================================================== */
+.gym-theme {
+  --radius: 0.5rem;
+
+  --background: oklch(0.11 0.006 285);
+  --foreground: oklch(0.96 0.003 285);
+
+  --card: oklch(0.145 0.008 285);
+  --card-foreground: oklch(0.96 0.003 285);
+
+  --popover: oklch(0.145 0.008 285);
+  --popover-foreground: oklch(0.96 0.003 285);
+
+  --primary: oklch(0.6 0.23 302);
+  --primary-foreground: oklch(0.99 0.005 302);
+
+  --secondary: oklch(0.19 0.01 285);
+  --secondary-foreground: oklch(0.92 0.003 285);
+
+  --muted: oklch(0.18 0.008 285);
+  --muted-foreground: oklch(0.62 0.012 285);
+
+  --accent: oklch(0.24 0.05 302);
+  --accent-foreground: oklch(0.88 0.05 302);
+
+  --destructive: oklch(0.6 0.22 25);
+  --destructive-foreground: oklch(0.99 0.005 25);
+
+  --success: oklch(0.65 0.16 150);
+  --success-foreground: oklch(0.1 0.02 150);
+
+  --warning: oklch(0.72 0.17 55);
+  --warning-foreground: oklch(0.1 0.02 55);
+
+  --border: oklch(0.26 0.012 285);
+  --input: oklch(0.24 0.012 285);
+  --ring: oklch(0.6 0.23 302 / 0.55);
+
+  --sidebar: oklch(0.085 0.006 285);
+  --sidebar-foreground: oklch(0.82 0.005 285);
+  --sidebar-border: oklch(0.2 0.012 285);
+  --sidebar-accent: oklch(0.22 0.06 302);
+  --sidebar-accent-foreground: oklch(0.92 0.04 302);
+  --sidebar-primary: oklch(0.68 0.22 302);
+
+  --chart-1: oklch(0.65 0.22 302);
+  --chart-2: oklch(0.7 0.15 320);
+  --chart-3: oklch(0.75 0.14 260);
+  --chart-4: oklch(0.72 0.16 55);
+  --chart-5: oklch(0.65 0.16 150);
+
+  color-scheme: dark;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.gym-theme .font-display {
+  font-family: var(--font-oswald), var(--font-sans);
+  letter-spacing: 0.01em;
+}
+
+.gym-theme .gym-hairline {
+  background-image: linear-gradient(180deg, oklch(0.6 0.23 302 / 0.5), transparent 70%);
+}
+
+.gym-theme .gym-grain {
+  background-image: radial-gradient(oklch(1 0 0 / 0.035) 1px, transparent 0);
+  background-size: 3px 3px;
+}

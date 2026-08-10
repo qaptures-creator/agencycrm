@@ -3,6 +3,8 @@
 // projects, or financial data are ever created here.
 import { PrismaClient } from "@prisma/client";
 import { DEFAULT_PIPELINE_STAGES, DEFAULT_DELIVERABLE_STATUSES } from "../src/lib/constants";
+import { hashPassword } from "../src/lib/gym/password";
+import { seedGymDemoData } from "./seed-gym-demo";
 
 const prisma = new PrismaClient();
 
@@ -40,6 +42,58 @@ async function main() {
       },
     });
     console.log("Seeded default team member.");
+  }
+
+  // ---------------------------------------------------------------------
+  // Muscle Massacre — Gym CRM: structural bootstrap (always runs, idempotent)
+  // ---------------------------------------------------------------------
+
+  await prisma.gymSettings.upsert({
+    where: { id: "singleton" },
+    create: { id: "singleton" },
+    update: {},
+  });
+
+  for (const provider of ["EMAIL", "ASHBOURNE", "WEBSITE", "GOOGLE_CALENDAR", "META"]) {
+    await prisma.gymIntegration.upsert({
+      where: { provider },
+      create: { provider, status: "NOT_CONNECTED" },
+      update: {},
+    });
+  }
+
+  const gymUserCount = await prisma.gymUser.count();
+  if (gymUserCount === 0) {
+    const email = (process.env.GYM_OWNER_EMAIL || "admin@musclemassacre.com").toLowerCase();
+    const name = process.env.GYM_OWNER_NAME || "Gym Owner";
+    const password = process.env.GYM_OWNER_PASSWORD || "MuscleMassacre1!";
+
+    const owner = await prisma.gymUser.create({
+      data: {
+        name,
+        email,
+        accessRole: "OWNER",
+        passwordHash: hashPassword(password),
+        mustResetPassword: !process.env.GYM_OWNER_PASSWORD,
+        staff: {
+          create: { fullName: name, email, position: "Owner", employmentStatus: "Active" },
+        },
+      },
+    });
+
+    console.log("─".repeat(60));
+    console.log("Muscle Massacre — bootstrap Owner account created:");
+    console.log(`  email:    ${owner.email}`);
+    if (!process.env.GYM_OWNER_PASSWORD) {
+      console.log(`  password: ${password}  (change GYM_OWNER_PASSWORD env var for production)`);
+    } else {
+      console.log("  password: set from GYM_OWNER_PASSWORD env var");
+    }
+    console.log("─".repeat(60));
+  }
+
+  if (process.env.NODE_ENV !== "production" || process.env.SEED_GYM_DEMO === "true") {
+    await seedGymDemoData(prisma);
   }
 }
 

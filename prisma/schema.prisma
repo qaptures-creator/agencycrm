@@ -285,3 +285,649 @@ model Activity {
   @@index([clientId])
   @@index([dueAt])
 }
+
+// =============================================================================
+// MUSCLE MASSACRE — GYM CRM
+// Separate product living in the same app/database as the Agency CRM above.
+// Every model is prefixed `Gym` to keep the two domains from colliding.
+// String "enum" fields follow the same convention as the Agency CRM: plain
+// strings backed by shared TS unions in src/lib/gym/constants.ts.
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// Auth, staff & permissions
+// ---------------------------------------------------------------------------
+
+model GymUser {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  accessRole   String    @default("STAFF") // OWNER | MANAGER | STAFF | MARKETING
+  active       Boolean   @default(true)
+  mustResetPassword Boolean @default(false)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  staff GymStaff?
+
+  sessions           GymSession[]
+  notifications      GymNotification[]
+  createdAnnouncements GymAnnouncement[]      @relation("AnnouncementCreatedBy")
+  taskComments       GymTaskComment[]         @relation("TaskCommentAuthor")
+  tasksCreated       GymTask[]                @relation("TaskCreatedBy")
+  enquiryMessages    GymEnquiryMessage[]      @relation("EnquiryMessageAuthor")
+  memberNotes        GymMemberNote[]          @relation("MemberNoteAuthor")
+  leadActivities     GymLeadActivity[]        @relation("LeadActivityCreatedBy")
+  membershipEvents   GymMembershipEvent[]     @relation("MembershipEventCreatedBy")
+  incidentsReported  GymIncident[]            @relation("IncidentReportedBy")
+  auditLogs          GymAuditLog[]
+  inventoryTxns      GymInventoryTransaction[] @relation("InventoryTxnCreatedBy")
+  attachmentsUploaded GymAttachment[]         @relation("AttachmentUploadedBy")
+  resetTokens        GymPasswordResetToken[]
+
+  @@index([accessRole])
+}
+
+model GymSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user   GymUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
+}
+
+model GymPasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user   GymUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
+}
+
+model GymStaff {
+  id                    String    @id @default(cuid())
+  fullName              String
+  email                 String?
+  phone                 String?
+  position              String // Owner | Manager | Reception | Gym Floor Staff | Cleaner | Shake Bar | Marketing | Coach / PT
+  employmentStatus      String    @default("Active") // Active | Part-Time | Casual | Former
+  startDate             DateTime?
+  endDate               DateTime?
+  typicalHours          String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  photoUrl              String?
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user   GymUser? @relation(fields: [userId], references: [id])
+  userId String?  @unique
+
+  shifts             GymRotaShift[]
+  attendance         GymAttendance[]
+  tasksAssigned      GymTask[]              @relation("TaskAssignee")
+  enquiriesAssigned  GymEnquiry[]           @relation("EnquiryAssignee")
+  leadsAssigned      GymLead[]              @relation("LeadAssignee")
+  maintenanceReported GymMaintenanceTicket[] @relation("MaintenanceReportedBy")
+  maintenanceAssigned GymMaintenanceTicket[] @relation("MaintenanceAssignee")
+  contentOwned       GymMarketingContent[]  @relation("ContentOwner")
+
+  @@index([position])
+}
+
+// ---------------------------------------------------------------------------
+// Staff Rota & Attendance
+// ---------------------------------------------------------------------------
+
+model GymRotaShift {
+  id            String    @id @default(cuid())
+  date          DateTime  @db.Date
+  startTime     DateTime
+  endTime       DateTime
+  breakMinutes  Int       @default(0)
+  shiftRole     String?
+  notes         String?
+  published     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  staff   GymStaff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staffId String
+
+  attendance GymAttendance[]
+
+  @@index([staffId])
+  @@index([date])
+}
+
+model GymAttendance {
+  id           String    @id @default(cuid())
+  clockInAt    DateTime?
+  clockOutAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  staff   GymStaff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staffId String
+
+  shift   GymRotaShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  shiftId String?
+
+  @@index([staffId])
+  @@index([shiftId])
+}
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+model GymTask {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  dueDate     DateTime?
+  dueTime     String?
+  priority    String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  category    String    @default("OTHER") // CLEANING | CUSTOMER_SERVICE | MEMBERSHIP | EQUIPMENT | MAINTENANCE | SHAKE_BAR | MARKETING | ADMIN | HEALTH_SAFETY | OTHER
+  recurrence  String    @default("ONE_OFF") // ONE_OFF | DAILY | WEEKLY
+  recurrenceDay String? // MON..SUN, for WEEKLY
+  status      String    @default("TODO") // TODO | IN_PROGRESS | COMPLETED | OVERDUE
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  assignedTo   GymStaff? @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedToId String?
+
+  createdBy   GymUser? @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  createdById String?
+
+  comments GymTaskComment[]
+
+  @@index([assignedToId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model GymTaskComment {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  task   GymTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId String
+
+  author   GymUser? @relation("TaskCommentAuthor", fields: [authorId], references: [id])
+  authorId String?
+
+  @@index([taskId])
+}
+
+// ---------------------------------------------------------------------------
+// Members & Memberships
+// ---------------------------------------------------------------------------
+
+model GymMember {
+  id                    String    @id @default(cuid())
+  memberNumber          String    @unique
+  fullName              String
+  email                 String?
+  phone                 String?
+  dob                   DateTime?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  address               String?
+  joinDate              DateTime  @default(now())
+  lastVisitAt           DateTime?
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  memberships GymMembership[]
+  memberNotes GymMemberNote[]
+  payments    GymPayment[]
+  leadsWon    GymLead[]       @relation("LeadConvertedMember")
+  enquiries   GymEnquiry[]    @relation("EnquiryConvertedMember")
+
+  @@index([email])
+  @@index([phone])
+}
+
+model GymMemberNote {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  member   GymMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  memberId String
+
+  author   GymUser? @relation("MemberNoteAuthor", fields: [authorId], references: [id])
+  authorId String?
+
+  @@index([memberId])
+}
+
+model GymMembershipPlan {
+  id                   String   @id @default(cuid())
+  name                 String
+  price                Float
+  billingFrequency     String   @default("MONTHLY") // WEEKLY | MONTHLY | ANNUAL
+  joiningFee           Float?
+  contractLengthMonths Int?
+  active               Boolean  @default(true)
+  description          String?
+  source               String   @default("MANUAL") // MANUAL | ASHBOURNE
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  memberships GymMembership[]
+}
+
+model GymMembership {
+  id              String    @id @default(cuid())
+  startDate       DateTime  @default(now())
+  renewalDate     DateTime?
+  status          String    @default("ACTIVE") // ACTIVE | FROZEN | CANCELLED | EXPIRED | OVERDUE
+  billingAmount   Float
+  paymentFrequency String   @default("MONTHLY")
+  paymentStatus   String    @default("CURRENT") // CURRENT | OVERDUE | FAILED
+  freezeStart     DateTime?
+  freezeEnd       DateTime?
+  cancelledAt     DateTime?
+  source          String    @default("MANUAL") // MANUAL | ASHBOURNE
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  member   GymMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  memberId String
+
+  plan   GymMembershipPlan @relation(fields: [planId], references: [id])
+  planId String
+
+  events GymMembershipEvent[]
+
+  @@index([memberId])
+  @@index([planId])
+  @@index([status])
+}
+
+model GymMembershipEvent {
+  id        String   @id @default(cuid())
+  type      String // JOINED | FROZEN | UNFROZEN | CANCELLED | RENEWED | PAYMENT_FAILED | UPDATED
+  notes     String?
+  createdAt DateTime @default(now())
+
+  membership   GymMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membershipId String
+
+  createdBy   GymUser? @relation("MembershipEventCreatedBy", fields: [createdById], references: [id])
+  createdById String?
+
+  @@index([membershipId])
+}
+
+model GymPayment {
+  id              String   @id @default(cuid())
+  transactionRef  String?
+  date            DateTime @default(now())
+  amount          Float
+  type            String   @default("MEMBERSHIP") // MEMBERSHIP | JOINING_FEE | DAY_PASS | OTHER
+  status          String   @default("PAID") // PAID | PENDING | FAILED | REFUNDED
+  provider        String   @default("ASHBOURNE")
+  createdAt       DateTime @default(now())
+
+  member   GymMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  memberId String?
+
+  @@index([memberId])
+  @@index([status])
+  @@index([date])
+}
+
+// ---------------------------------------------------------------------------
+// Enquiries (email inbox architecture)
+// ---------------------------------------------------------------------------
+
+model GymEnquiry {
+  id           String    @id @default(cuid())
+  name         String
+  email        String?
+  phone        String?
+  subject      String?
+  category     String    @default("OTHER") // MEMBERSHIP | DAY_PASS | GENERAL | CANCELLATION | PAYMENT | COMPLAINT | PERSONAL_TRAINING | FACILITIES | BUSINESS | OTHER
+  status       String    @default("NEW") // NEW | REPLIED | AWAITING_RESPONSE | FOLLOW_UP | CONVERTED | CLOSED
+  priority     String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  source       String    @default("MANUAL") // EMAIL | WEBSITE | PHONE | WALK_IN | MANUAL
+  followUpAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assignedTo   GymStaff? @relation("EnquiryAssignee", fields: [assignedToId], references: [id])
+  assignedToId String?
+
+  convertedToLead   GymLead? @relation("LeadFromEnquiry")
+  convertedMember    GymMember? @relation("EnquiryConvertedMember", fields: [convertedMemberId], references: [id])
+  convertedMemberId  String?
+
+  messages GymEnquiryMessage[]
+
+  @@index([status])
+  @@index([assignedToId])
+  @@index([category])
+}
+
+model GymEnquiryMessage {
+  id        String   @id @default(cuid())
+  direction String // INBOUND | OUTBOUND | INTERNAL_NOTE
+  body      String
+  fromEmail String?
+  createdAt DateTime @default(now())
+
+  enquiry   GymEnquiry @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  enquiryId String
+
+  author   GymUser? @relation("EnquiryMessageAuthor", fields: [authorId], references: [id])
+  authorId String?
+
+  @@index([enquiryId])
+}
+
+// ---------------------------------------------------------------------------
+// Lead CRM (membership sales pipeline)
+// ---------------------------------------------------------------------------
+
+model GymLead {
+  id                 String    @id @default(cuid())
+  name               String
+  email              String?
+  phone              String?
+  source             String    @default("OTHER") // WEBSITE | INSTAGRAM | FACEBOOK | GOOGLE | WALK_IN | PHONE | EMAIL | REFERRAL | TIKTOK | OTHER
+  membershipInterest String?
+  stage              String    @default("NEW_LEAD") // NEW_LEAD | CONTACTED | INTERESTED | TOUR_BOOKED | TRIAL | FOLLOW_UP | READY_TO_JOIN | JOINED | LOST
+  lastContactAt      DateTime?
+  nextFollowUpAt     DateTime?
+  order              Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  assignedTo   GymStaff? @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  assignedToId String?
+
+  campaign   GymMarketingCampaign? @relation(fields: [campaignId], references: [id])
+  campaignId String?
+
+  fromEnquiry   GymEnquiry? @relation("LeadFromEnquiry", fields: [fromEnquiryId], references: [id])
+  fromEnquiryId String?     @unique
+
+  convertedMember   GymMember? @relation("LeadConvertedMember", fields: [convertedMemberId], references: [id])
+  convertedMemberId String?
+
+  activities GymLeadActivity[]
+
+  @@index([stage])
+  @@index([assignedToId])
+  @@index([source])
+}
+
+model GymLeadActivity {
+  id        String   @id @default(cuid())
+  type      String // CALL | EMAIL | NOTE | TOUR | FOLLOW_UP | STAGE_CHANGE
+  notes     String?
+  createdAt DateTime @default(now())
+
+  lead   GymLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId String
+
+  createdBy   GymUser? @relation("LeadActivityCreatedBy", fields: [createdById], references: [id])
+  createdById String?
+
+  @@index([leadId])
+}
+
+// ---------------------------------------------------------------------------
+// Equipment & Maintenance
+// ---------------------------------------------------------------------------
+
+model GymEquipment {
+  id               String    @id @default(cuid())
+  name             String
+  manufacturer     String?
+  model            String?
+  category         String    @default("OTHER") // CHEST | BACK | SHOULDERS | ARMS | LEGS | CARDIO | FREE_WEIGHTS | OTHER
+  serialNumber     String?
+  purchaseDate     DateTime?
+  condition        String    @default("GOOD") // EXCELLENT | GOOD | NEEDS_ATTENTION | OUT_OF_SERVICE
+  lastServiceDate  DateTime?
+  nextServiceDate  DateTime?
+  location         String?
+  notes            String?
+  photoUrl         String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  maintenanceTickets GymMaintenanceTicket[]
+
+  @@index([category])
+  @@index([condition])
+}
+
+model GymMaintenanceTicket {
+  id               String    @id @default(cuid())
+  issue            String
+  area             String?
+  priority         String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  reportedAt       DateTime  @default(now())
+  photoUrl         String?
+  status           String    @default("REPORTED") // REPORTED | INVESTIGATING | SCHEDULED | IN_PROGRESS | FIXED
+  resolutionNotes  String?
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  equipment   GymEquipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
+  equipmentId String?
+
+  reportedBy   GymStaff? @relation("MaintenanceReportedBy", fields: [reportedById], references: [id])
+  reportedById String?
+
+  assignedTo   GymStaff? @relation("MaintenanceAssignee", fields: [assignedToId], references: [id])
+  assignedToId String?
+
+  @@index([equipmentId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Incidents
+// ---------------------------------------------------------------------------
+
+model GymIncident {
+  id                String    @id @default(cuid())
+  occurredAt        DateTime  @default(now())
+  category          String    @default("OTHER") // INJURY | ACCIDENT | CUSTOMER_DISPUTE | SECURITY | EQUIPMENT_FAILURE | OTHER
+  location          String?
+  description       String
+  actionTaken       String?
+  witnesses         String?
+  followUpRequired  Boolean   @default(false)
+  followUpNotes     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  reportedBy   GymUser? @relation("IncidentReportedBy", fields: [reportedById], references: [id])
+  reportedById String?
+
+  @@index([category])
+  @@index([occurredAt])
+}
+
+// ---------------------------------------------------------------------------
+// Shake Bar
+// ---------------------------------------------------------------------------
+
+model GymShakeBarProduct {
+  id               String    @id @default(cuid())
+  name             String
+  category         String    @default("OTHER") // PROTEIN | PRE_WORKOUT | HYDRATION | ENERGY_DRINKS | SNACKS | OTHER
+  stock            Int       @default(0)
+  costPrice        Float?
+  sellingPrice     Float?
+  lowStockLevel    Int       @default(5)
+  supplier         String?
+  lastRestockedAt  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  transactions GymInventoryTransaction[]
+
+  @@index([category])
+}
+
+model GymInventoryTransaction {
+  id        String   @id @default(cuid())
+  type      String // RESTOCK | SALE | ADJUSTMENT | WASTE
+  quantity  Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  product   GymShakeBarProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  createdBy   GymUser? @relation("InventoryTxnCreatedBy", fields: [createdById], references: [id])
+  createdById String?
+
+  @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// Marketing
+// ---------------------------------------------------------------------------
+
+model GymMarketingCampaign {
+  id        String    @id @default(cuid())
+  name      String
+  type      String    @default("OTHER") // MEMBERSHIP_OFFER | NEW_EQUIPMENT | DAY_PASS | REFERRAL | GYM_EVENT | OTHER
+  status    String    @default("ACTIVE") // ACTIVE | PAUSED | ENDED
+  startDate DateTime?
+  endDate   DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  leads GymLead[]
+}
+
+model GymMarketingContent {
+  id          String    @id @default(cuid())
+  title       String
+  platform    String    @default("INSTAGRAM") // INSTAGRAM | TIKTOK | FACEBOOK | YOUTUBE | WEBSITE | EMAIL
+  shootDate   DateTime?
+  publishDate DateTime?
+  status      String    @default("IDEA") // IDEA | PLANNED | FILMED | EDITING | APPROVED | SCHEDULED | PUBLISHED
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  owner   GymStaff? @relation("ContentOwner", fields: [ownerId], references: [id])
+  ownerId String?
+
+  @@index([status])
+  @@index([platform])
+}
+
+// ---------------------------------------------------------------------------
+// Communications, Notifications & Announcements
+// ---------------------------------------------------------------------------
+
+model GymNotification {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user   GymUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId])
+  @@index([read])
+}
+
+model GymAnnouncement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy   GymUser? @relation("AnnouncementCreatedBy", fields: [createdById], references: [id])
+  createdById String?
+}
+
+// ---------------------------------------------------------------------------
+// Integrations, Audit Log, Attachments, Settings
+// ---------------------------------------------------------------------------
+
+model GymIntegration {
+  id          String    @id @default(cuid())
+  provider    String    @unique // EMAIL | ASHBOURNE | WEBSITE | GOOGLE_CALENDAR | META | OTHER
+  status      String    @default("NOT_CONNECTED") // NOT_CONNECTED | CONNECTED | ERROR
+  config      Json?
+  connectedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+model GymAuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user   GymUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId String?
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model GymAttachment {
+  id          String   @id @default(cuid())
+  url         String
+  filename    String?
+  contentType String?
+  entityType  String
+  entityId    String
+  createdAt   DateTime @default(now())
+
+  uploadedBy   GymUser? @relation("AttachmentUploadedBy", fields: [uploadedById], references: [id])
+  uploadedById String?
+
+  @@index([entityType, entityId])
+}
+
+model GymSettings {
+  id            String   @id @default("singleton")
+  gymName       String   @default("Muscle Massacre")
+  address       String?
+  phone         String?
+  email         String   @default("admin@musclemassacre.com")
+  website       String   @default("https://musclemassacre.com")
+  openingHours  Json?
+  updatedAt     DateTime @updatedAt
+}
