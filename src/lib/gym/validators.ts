@@ -5,10 +5,18 @@ const optionalString = z
   .optional()
   .transform((v) => (v && v.trim().length > 0 ? v.trim() : undefined));
 
+// Accepts a Date too (not just string) so it's idempotent: react-hook-form's
+// zodResolver already runs the schema client-side and hands the *transformed*
+// output (a Date) to onSubmit, which server actions then re-validate with the
+// same schema — re-parsing an already-transformed Date must not fail.
 const optionalDate = z
-  .string()
+  .union([z.string(), z.date()])
   .optional()
-  .transform((v) => (v && v.trim().length > 0 ? new Date(v) : undefined));
+  .transform((v) => {
+    if (!v) return undefined;
+    if (v instanceof Date) return v;
+    return v.trim().length > 0 ? new Date(v) : undefined;
+  });
 
 const optionalNumber = z
   .union([z.string(), z.number()])

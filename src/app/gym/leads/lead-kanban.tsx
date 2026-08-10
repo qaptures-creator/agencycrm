@@ -62,7 +62,7 @@ export function LeadKanban({ leads: initialLeads, onOpenLead }: { leads: LeadCar
   }
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext id="lead-kanban" sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin">
         {LEAD_STAGES.map((stage) => (
           <StageColumn
