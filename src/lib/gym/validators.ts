@@ -151,6 +151,29 @@ export const incidentSchema = z.object({
 });
 export type IncidentInput = z.infer<typeof incidentSchema>;
 
+export const membershipSchema = z.object({
+  memberId: z.string().min(1, "Member is required"),
+  planId: z.string().min(1, "Plan is required"),
+  startDate: optionalDate,
+  renewalDate: optionalDate,
+  billingAmount: requiredNumber,
+  paymentFrequency: z.string().default("MONTHLY"),
+  status: z.string().default("ACTIVE"),
+  paymentStatus: z.string().default("CURRENT"),
+});
+export type MembershipInput = z.infer<typeof membershipSchema>;
+
+export const paymentSchema = z.object({
+  memberId: z.string().min(1, "Member is required"),
+  transactionRef: optionalString,
+  date: optionalDate,
+  amount: requiredNumber,
+  type: z.string().default("MEMBERSHIP"),
+  status: z.string().default("PAID"),
+  provider: z.string().default("MANUAL"),
+});
+export type PaymentInput = z.infer<typeof paymentSchema>;
+
 export const shakeBarProductSchema = z.object({
   name: z.string().min(1, "Name is required"),
   category: z.string().default("OTHER"),
