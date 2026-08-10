@@ -161,3 +161,40 @@ export const shakeBarProductSchema = z.object({
   supplier: optionalString,
 });
 export type ShakeBarProductInput = z.infer<typeof shakeBarProductSchema>;
+
+export const marketingCampaignSchema = z.object({
+  name: z.string().min(1, "Campaign name is required"),
+  type: z.string().default("OTHER"),
+  status: z.string().default("ACTIVE"),
+  startDate: optionalDate,
+  endDate: optionalDate,
+  notes: optionalString,
+});
+export type MarketingCampaignInput = z.infer<typeof marketingCampaignSchema>;
+
+export const marketingContentSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  platform: z.string().default("INSTAGRAM"),
+  shootDate: optionalDate,
+  publishDate: optionalDate,
+  status: z.string().default("IDEA"),
+  notes: optionalString,
+  ownerId: optionalString,
+});
+export type MarketingContentInput = z.infer<typeof marketingContentSchema>;
+
+export const announcementSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  body: z.string().min(1, "Body is required"),
+  pinned: z.boolean().default(false),
+});
+export type AnnouncementInput = z.infer<typeof announcementSchema>;
+
+export const gymSettingsSchema = z.object({
+  gymName: z.string().min(1, "Gym name is required"),
+  address: optionalString,
+  phone: optionalString,
+  email: z.string().email("Enter a valid email"),
+  website: optionalString,
+});
+export type GymSettingsInput = z.infer<typeof gymSettingsSchema>;

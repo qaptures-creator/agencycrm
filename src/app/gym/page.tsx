@@ -34,6 +34,7 @@ import { Badge, DotBadge } from "@/components/ui/badge";
 import { GymStatusBadge } from "@/components/gym/status-badge";
 import { formatCurrency, formatDateTime, initials, cn } from "@/lib/utils";
 import { TaskQuickComplete } from "@/components/gym/dashboard/task-quick-complete";
+import { AnnouncementBanner } from "@/components/gym/announcement-banner";
 import { ENQUIRY_STATUSES, ENQUIRY_CATEGORIES, TASK_PRIORITIES, labelFor, colorFor } from "@/lib/gym/constants";
 
 function moneyGBP(v: number) {
@@ -76,6 +77,8 @@ export default async function GymDashboardPage() {
           </p>
         </div>
       </div>
+
+      <AnnouncementBanner />
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
