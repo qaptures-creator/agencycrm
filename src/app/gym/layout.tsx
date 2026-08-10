@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { requireGymUser } from "@/lib/gym/auth";
 import { GymSidebar } from "@/components/gym/sidebar";
 import { GymTopbar } from "@/components/gym/topbar";
+
+export const metadata: Metadata = { title: "Muscle Massacre" };
 
 export default async function GymLayout({ children }: { children: React.ReactNode }) {
   const user = await requireGymUser("/gym");
