@@ -5,10 +5,17 @@ const optionalString = z
   .optional()
   .transform((v) => (v && v.trim().length > 0 ? v.trim() : undefined));
 
+// Accepts both a raw date-input string (first parse, client-side via
+// zodResolver) and an already-parsed Date (re-parse on the server, since the
+// client passes the zodResolver's *output* into the server action).
 const optionalDate = z
-  .string()
+  .union([z.string(), z.date()])
   .optional()
-  .transform((v) => (v && v.trim().length > 0 ? new Date(v) : undefined));
+  .transform((v) => {
+    if (!v) return undefined;
+    if (v instanceof Date) return v;
+    return v.trim().length > 0 ? new Date(v) : undefined;
+  });
 
 const optionalNumber = z
   .union([z.string(), z.number()])
