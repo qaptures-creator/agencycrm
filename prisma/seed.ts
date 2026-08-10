@@ -92,7 +92,11 @@ async function main() {
     console.log("─".repeat(60));
   }
 
-  if (process.env.NODE_ENV !== "production" || process.env.SEED_GYM_DEMO === "true") {
+  // Demo data requires an explicit opt-in (never inferred from NODE_ENV,
+  // which isn't reliably set for a one-off `tsx` process on every platform)
+  // so a misconfigured production deploy can never end up with fabricated
+  // staff/members/revenue in it.
+  if (process.env.SEED_GYM_DEMO === "true") {
     await seedGymDemoData(prisma);
   }
 }
