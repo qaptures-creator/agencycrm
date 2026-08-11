@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentGymUser } from "@/lib/gym/auth";
 import { redirect } from "next/navigation";
 import { LoginForm } from "./login-form";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 export default async function GymLoginPage({
   searchParams,
@@ -13,7 +14,10 @@ export default async function GymLoginPage({
   const { next } = await searchParams;
 
   return (
-    <div className="gym-theme gym-grain flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <div className="gym-theme gym-grain relative flex min-h-screen items-center justify-center bg-background px-4 py-12">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary">

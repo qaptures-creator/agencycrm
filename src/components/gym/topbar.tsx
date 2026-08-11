@@ -3,6 +3,7 @@ import { MobileMenuButton } from "@/components/gym/mobile-menu-button";
 import { GymGlobalSearch } from "@/components/gym/global-search";
 import { NotificationsBell, type NotificationItem } from "@/components/gym/notifications-bell";
 import { GymQuickAdd } from "@/components/gym/quick-add";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 export async function GymTopbar({ user }: { user: { id: string; name: string; accessRole: string } }) {
   const notificationRows = await prisma.gymNotification.findMany({
@@ -27,6 +28,7 @@ export async function GymTopbar({ user }: { user: { id: string; name: string; ac
       <div className="flex-1">
         <GymGlobalSearch />
       </div>
+      <ThemeToggle />
       <NotificationsBell notifications={notifications} />
       <GymQuickAdd />
     </header>
