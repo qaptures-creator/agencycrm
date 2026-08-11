@@ -43,7 +43,7 @@ export function ConvertLeadDialog({
           }}
           onSuccess={(client) => {
             onOpenChange(false);
-            router.push(`/clients/${client.id}`);
+            router.push(`/clients/${client.id}?tab=documents&upload=proposal`);
           }}
           onCancel={() => onOpenChange(false)}
         />

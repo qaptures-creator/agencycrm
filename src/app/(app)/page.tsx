@@ -22,6 +22,12 @@ import { DonutChart } from "@/components/charts/donut-chart";
 import { BarSeriesChart } from "@/components/charts/bar-series-chart";
 import { ActivityFeed } from "@/components/activity-feed";
 import { UpcomingList } from "@/components/upcoming-list";
+import { DocumentsWidget } from "@/components/documents-widget";
+import { OutlookInbox } from "@/components/outlook-inbox";
+import { getMicrosoftConnectionStatus } from "@/actions/microsoft";
+import { getRecentDocuments } from "@/actions/documents";
+import { listRecentMessages } from "@/lib/microsoft-graph";
+import type { GraphMessage } from "@/lib/microsoft-graph";
 import {
   calcMRR,
   calcRevenueThisMonth,
@@ -37,23 +43,36 @@ import { formatCurrency, formatDate, isOverdue } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [clients, invoices, leads, projects, deliverables, activities] = await Promise.all([
-    prisma.client.findMany({ include: { retainer: true } }),
-    prisma.invoice.findMany({ include: { client: true } }),
-    prisma.lead.findMany({ include: { stage: true } }),
-    prisma.project.findMany({
-      where: { shootDate: { gte: new Date() } },
-      orderBy: { shootDate: "asc" },
-      include: { client: true },
-      take: 8,
-    }),
-    prisma.deliverable.findMany({ include: { status: true, client: true } }),
-    prisma.activity.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      include: { createdBy: true, lead: true, client: true },
-    }),
-  ]);
+  const [clients, invoices, leads, projects, deliverables, activities, microsoftStatus, recentDocuments] =
+    await Promise.all([
+      prisma.client.findMany({ include: { retainer: true } }),
+      prisma.invoice.findMany({ include: { client: true } }),
+      prisma.lead.findMany({ include: { stage: true } }),
+      prisma.project.findMany({
+        where: { shootDate: { gte: new Date() } },
+        orderBy: { shootDate: "asc" },
+        include: { client: true },
+        take: 8,
+      }),
+      prisma.deliverable.findMany({ include: { status: true, client: true } }),
+      prisma.activity.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        include: { createdBy: true, lead: true, client: true },
+      }),
+      getMicrosoftConnectionStatus(),
+      getRecentDocuments(6),
+    ]);
+
+  let messages: GraphMessage[] = [];
+  let inboxError: string | undefined;
+  if (microsoftStatus.connected) {
+    try {
+      messages = await listRecentMessages(6);
+    } catch (err) {
+      inboxError = err instanceof Error ? err.message : "Couldn't load inbox";
+    }
+  }
 
   const activeClients = clients.filter((c) => c.status === "ACTIVE").length;
   const mrr = calcMRR(clients);
@@ -175,6 +194,11 @@ export default async function DashboardPage() {
           emptyMessage="Nothing overdue. Nice work."
           viewAllHref="/deliverables"
         />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <OutlookInbox messages={messages} microsoftConnected={microsoftStatus.connected} error={inboxError} />
+        <DocumentsWidget documents={recentDocuments} microsoftConnected={microsoftStatus.connected} />
       </div>
 
       <ActivityFeed activities={activities} />

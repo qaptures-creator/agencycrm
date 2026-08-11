@@ -146,7 +146,7 @@ export function ClientsView({ clients, services }: { clients: ClientWithMeta[]; 
           services={services}
           onSuccess={(client) => {
             setAddOpen(false);
-            router.push(`/clients/${client.id}`);
+            router.push(`/clients/${client.id}?tab=documents&upload=proposal`);
           }}
           onCancel={() => setAddOpen(false)}
         />

@@ -64,6 +64,15 @@ export const DELIVERABLE_CONTENT_TYPES: { value: DeliverableContentType; label: 
   { value: "OTHER", label: "Other" },
 ];
 
+export type DocumentCategory = "PROPOSAL" | "CONTRACT" | "INVOICE" | "OTHER";
+
+export const DOCUMENT_CATEGORIES: { value: DocumentCategory; label: string; color: string }[] = [
+  { value: "PROPOSAL", label: "Proposal", color: "#6366f1" },
+  { value: "CONTRACT", label: "Contract", color: "#8b5cf6" },
+  { value: "INVOICE", label: "Invoice", color: "#f59e0b" },
+  { value: "OTHER", label: "Other", color: "#64748b" },
+];
+
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "REVISIONS_REQUESTED";
 
 export const APPROVAL_STATUSES: { value: ApprovalStatus; label: string; color: string }[] = [

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/current-user";
+import { getMicrosoftConnectionStatus } from "@/actions/microsoft";
 import { ClientProfileView } from "./client-profile-view";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function ClientProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [client, users, deliverableStatuses, currentUser] = await Promise.all([
+  const [client, users, deliverableStatuses, currentUser, microsoftStatus] = await Promise.all([
     prisma.client.findUnique({
       where: { id },
       include: {
@@ -25,11 +26,13 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
         invoices: { orderBy: { createdAt: "desc" } },
         activities: { orderBy: { createdAt: "desc" }, include: { createdBy: true } },
         retainer: true,
+        documents: { orderBy: { uploadedAt: "desc" } },
       },
     }),
     prisma.user.findMany({ orderBy: { name: "asc" } }),
     prisma.deliverableStatusOption.findMany({ orderBy: { order: "asc" } }),
     getCurrentUser(),
+    getMicrosoftConnectionStatus(),
   ]);
 
   if (!client) notFound();
@@ -40,6 +43,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
       users={users}
       deliverableStatuses={deliverableStatuses}
       currentUserId={currentUser.id}
+      microsoftConnected={microsoftStatus.connected}
     />
   );
 }

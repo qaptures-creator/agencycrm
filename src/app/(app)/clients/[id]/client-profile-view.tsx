@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Pencil, Trash2, Mail, Phone, Globe, AtSign, ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -25,6 +25,7 @@ import { ProjectsTab } from "./projects-tab";
 import { DeliverablesTab } from "./deliverables-tab";
 import { RetainerTab } from "./retainer-tab";
 import { InvoicesTab } from "./invoices-tab";
+import { DocumentsTab } from "./documents-tab";
 import { ActivityLog } from "@/components/activity-log";
 import { CLIENT_STATUSES } from "@/lib/constants";
 import { deleteClient } from "@/actions/clients";
@@ -41,6 +42,7 @@ import type {
   Invoice,
   Activity,
   Retainer,
+  Document,
 } from "@prisma/client";
 
 type FullClient = Client & {
@@ -51,6 +53,7 @@ type FullClient = Client & {
   invoices: Invoice[];
   activities: (Activity & { createdBy: User | null })[];
   retainer: Retainer | null;
+  documents: Document[];
 };
 
 export function ClientProfileView({
@@ -58,15 +61,20 @@ export function ClientProfileView({
   users,
   deliverableStatuses,
   currentUserId,
+  microsoftConnected,
 }: {
   client: FullClient;
   users: User[];
   deliverableStatuses: DeliverableStatusOption[];
   currentUserId: string;
+  microsoftConnected: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [editOpen, setEditOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const initialTab = searchParams.get("tab") ?? "overview";
+  const autoOpenUpload = searchParams.get("upload") === "proposal";
 
   async function handleDelete() {
     try {
@@ -126,13 +134,14 @@ export function ClientProfileView({
         </div>
       </div>
 
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="projects">Projects ({client.projects.length})</TabsTrigger>
           <TabsTrigger value="deliverables">Deliverables ({client.deliverables.length})</TabsTrigger>
           <TabsTrigger value="retainer">Retainer</TabsTrigger>
           <TabsTrigger value="invoices">Invoices ({client.invoices.length})</TabsTrigger>
+          <TabsTrigger value="documents">Documents ({client.documents.length})</TabsTrigger>
           <TabsTrigger value="activity">Activity ({client.activities.length})</TabsTrigger>
         </TabsList>
 
@@ -156,6 +165,14 @@ export function ClientProfileView({
         </TabsContent>
         <TabsContent value="invoices">
           <InvoicesTab client={client} invoices={client.invoices} />
+        </TabsContent>
+        <TabsContent value="documents">
+          <DocumentsTab
+            client={client}
+            documents={client.documents}
+            microsoftConnected={microsoftConnected}
+            autoOpenUpload={autoOpenUpload}
+          />
         </TabsContent>
         <TabsContent value="activity">
           <ActivityLog

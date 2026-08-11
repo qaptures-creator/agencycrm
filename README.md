@@ -40,7 +40,8 @@ Once you start committing migrations (`npx prisma migrate dev --name <name>`), s
 - **Analytics** — revenue over time, leads generated, leads by source, lead→client conversion, deals won/lost, client revenue, content delivered, MRR by client.
 - **Activities & follow-ups** — calls, emails, DMs, WhatsApp, meetings, proposals and notes logged against leads and clients, with schedulable follow-ups and overdue highlighting.
 - **Global search** (⌘K) across leads, clients, contacts, projects and deliverables.
-- **Settings** — manage pipeline stages, deliverable statuses, team members and the services catalog.
+- **Settings** — manage pipeline stages, deliverable statuses, team members, the services catalog, and integrations.
+- **Microsoft 365 integration** *(optional, see `.env.example`)* — connect an Outlook mailbox to see its inbox on the dashboard, and upload client proposals/documents straight into that account's OneDrive from each client's Documents tab.
 
 ## Data model
 
