@@ -25,6 +25,20 @@ export function isMicrosoftConfigured() {
   );
 }
 
+/**
+ * The redirect URI MUST exactly match what's registered in Azure, and MUST be
+ * identical between the initial authorize request and the token exchange.
+ * We deliberately don't derive this from the incoming request (req.nextUrl.origin)
+ * — behind Railway's proxy that can resolve to an internal address like
+ * localhost:8080 instead of the public domain, which Azure then rejects
+ * (AADSTS50011). APP_URL must be set to the real public app URL, e.g.
+ * https://prmote-production.up.railway.app
+ */
+export function getMicrosoftRedirectUri() {
+  const base = requireEnv("APP_URL").replace(/\/+$/, "");
+  return `${base}/api/auth/microsoft/callback`;
+}
+
 export async function getAuthUrl(redirectUri: string) {
   const client = getMsalClient();
   return client.getAuthCodeUrl({
