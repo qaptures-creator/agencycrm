@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { getMicrosoftConnectionStatus } from "@/actions/microsoft";
 import { CalendarView } from "./calendar-view";
 
 export const dynamic = "force-dynamic";
 
 export default async function CalendarPage() {
-  const [projects, deliverables] = await Promise.all([
+  const [projects, deliverables, microsoftStatus] = await Promise.all([
     prisma.project.findMany({
       where: { OR: [{ shootDate: { not: null } }, { deadline: { not: null } }] },
       include: { client: true },
@@ -13,7 +14,8 @@ export default async function CalendarPage() {
       where: { deadline: { not: null } },
       include: { client: true, status: true },
     }),
+    getMicrosoftConnectionStatus(),
   ]);
 
-  return <CalendarView projects={projects} deliverables={deliverables} />;
+  return <CalendarView projects={projects} deliverables={deliverables} microsoftConnected={microsoftStatus.connected} />;
 }

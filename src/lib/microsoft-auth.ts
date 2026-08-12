@@ -1,7 +1,7 @@
 import { ConfidentialClientApplication } from "@azure/msal-node";
 import { prisma } from "@/lib/prisma";
 
-export const GRAPH_SCOPES = ["Mail.Read", "Files.ReadWrite", "User.Read", "offline_access"];
+export const GRAPH_SCOPES = ["Mail.Read", "Files.ReadWrite", "Calendars.Read", "User.Read", "offline_access"];
 
 function requireEnv(name: string) {
   const value = process.env[name];

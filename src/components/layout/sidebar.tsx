@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clapperboard, X } from "lucide-react";
+import { X } from "lucide-react";
 import { NAV_ITEMS } from "./nav-config";
+import { BrandMark, BRAND_NAME } from "./brand-mark";
 import { cn } from "@/lib/utils";
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -44,10 +45,8 @@ export function Sidebar() {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
       <div className="flex h-14 items-center gap-2 px-5">
-        <div className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Clapperboard className="size-4" />
-        </div>
-        <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">Agency CRM</span>
+        <BrandMark />
+        <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">{BRAND_NAME}</span>
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin py-2">
         <NavLinks />
@@ -67,10 +66,8 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
       <aside className="relative flex w-64 flex-col bg-sidebar border-r border-sidebar-border">
         <div className="flex h-14 items-center justify-between gap-2 px-5">
           <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Clapperboard className="size-4" />
-            </div>
-            <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">Agency CRM</span>
+            <BrandMark />
+            <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">{BRAND_NAME}</span>
           </div>
           <button onClick={onClose} className="rounded-md p-1 text-sidebar-foreground/60 hover:bg-sidebar-accent">
             <X className="size-4" />

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { clientSchema, type ClientInput } from "@/lib/validators";
 import { createClient, updateClient, convertLeadToClient } from "@/actions/clients";
-import { CLIENT_PAYMENT_STATUSES, CLIENT_STATUSES } from "@/lib/constants";
+import { CLIENT_PAYMENT_STATUSES, CLIENT_STATUSES, SWATCH_COLORS } from "@/lib/constants";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -63,6 +63,7 @@ export function ClientForm({
       contractEnd: toDateInputValue(client?.contractEnd),
       paymentStatus: client?.paymentStatus ?? "CURRENT",
       status: client?.status ?? "ACTIVE",
+      color: client?.color ?? SWATCH_COLORS[0],
       notes: client?.notes ?? "",
       serviceIds: client?.services?.map((s) => s.id) ?? leadDefaults?.serviceIds ?? [],
     },
@@ -167,6 +168,28 @@ export function ClientForm({
                   ))}
                 </SelectContent>
               </Select>
+            )}
+          />
+        </div>
+
+        <div className="col-span-2 space-y-1.5">
+          <Label>Colour</Label>
+          <Controller
+            control={control}
+            name="color"
+            render={({ field }) => (
+              <div className="flex gap-2">
+                {SWATCH_COLORS.map((c) => (
+                  <button
+                    type="button"
+                    key={c}
+                    onClick={() => field.onChange(c)}
+                    className="size-7 rounded-full ring-offset-2 ring-offset-background"
+                    style={{ backgroundColor: c, boxShadow: field.value === c ? `0 0 0 2px ${c}` : undefined }}
+                    aria-label={`Colour ${c}`}
+                  />
+                ))}
+              </div>
             )}
           />
         </div>

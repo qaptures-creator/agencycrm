@@ -15,18 +15,19 @@ import {
   subMonths,
   isToday,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Camera, Clapperboard, PackageCheck, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Camera, Clapperboard, PackageCheck, CalendarDays, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { cn, formatDate, isOverdue } from "@/lib/utils";
 import type { Client, Project, Deliverable, DeliverableStatusOption } from "@prisma/client";
+import type { GraphEvent } from "@/lib/microsoft-graph";
 
 type ProjectWithClient = Project & { client: Client };
 type DeliverableWithClient = Deliverable & { client: Client; status: DeliverableStatusOption };
 
 type CalEvent = {
   date: Date;
-  kind: "shoot" | "project-deadline" | "deliverable-deadline";
+  kind: "shoot" | "project-deadline" | "deliverable-deadline" | "outlook-event";
   title: string;
   subtitle: string;
   href: string;
@@ -35,12 +36,47 @@ type CalEvent = {
 export function CalendarView({
   projects,
   deliverables,
+  microsoftConnected,
 }: {
   projects: ProjectWithClient[];
   deliverables: DeliverableWithClient[];
+  microsoftConnected: boolean;
 }) {
   const [month, setMonth] = React.useState(() => startOfMonth(new Date()));
   const [view, setView] = React.useState<"month" | "list">("month");
+  const [outlookEvents, setOutlookEvents] = React.useState<GraphEvent[]>([]);
+  const [outlookError, setOutlookError] = React.useState(false);
+
+  const gridStart = startOfWeek(startOfMonth(month));
+  const gridEnd = endOfWeek(endOfMonth(month));
+  const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+
+  React.useEffect(() => {
+    if (!microsoftConnected) {
+      setOutlookEvents([]);
+      return;
+    }
+    let cancelled = false;
+    setOutlookError(false);
+    fetch(`/api/microsoft/calendar?start=${gridStart.toISOString()}&end=${gridEnd.toISOString()}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load Outlook calendar");
+        return res.json();
+      })
+      .then((data: { events: GraphEvent[] }) => {
+        if (!cancelled) setOutlookEvents(data.events ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOutlookEvents([]);
+          setOutlookError(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [microsoftConnected, gridStart.getTime(), gridEnd.getTime()]);
 
   const events: CalEvent[] = React.useMemo(() => {
     const evts: CalEvent[] = [];
@@ -75,12 +111,17 @@ export function CalendarView({
         });
       }
     }
+    for (const e of outlookEvents) {
+      evts.push({
+        date: new Date(e.start.dateTime + (e.start.dateTime.endsWith("Z") ? "" : "Z")),
+        kind: "outlook-event",
+        title: e.subject || "(No subject)",
+        subtitle: e.location?.displayName ? `${e.location.displayName} · Outlook` : "Outlook",
+        href: e.webLink,
+      });
+    }
     return evts.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [projects, deliverables]);
-
-  const gridStart = startOfWeek(startOfMonth(month));
-  const gridEnd = endOfWeek(endOfMonth(month));
-  const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+  }, [projects, deliverables, outlookEvents]);
 
   const upcoming = events.filter((e) => e.date.getTime() >= new Date().setHours(0, 0, 0, 0));
 
@@ -91,7 +132,15 @@ export function CalendarView({
           <h1 className="text-xl font-semibold tracking-tight">Calendar</h1>
           <p className="text-sm text-muted-foreground">Shoots and deadlines across every client.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {!microsoftConnected && (
+            <Link href="/settings" className="text-xs text-muted-foreground underline-offset-2 hover:underline">
+              Connect Outlook in Settings to sync your calendar
+            </Link>
+          )}
+          {microsoftConnected && outlookError && (
+            <span className="text-xs text-destructive">Couldn't load Outlook events</span>
+          )}
           <Button variant={view === "month" ? "default" : "outline"} size="sm" onClick={() => setView("month")}>
             Month
           </Button>
@@ -110,6 +159,7 @@ export function CalendarView({
             <Link
               key={i}
               href={e.href}
+              {...(e.kind === "outlook-event" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
               className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-secondary/40"
             >
               <EventIcon kind={e.kind} />
@@ -164,11 +214,13 @@ export function CalendarView({
                       <Link
                         key={i}
                         href={e.href}
+                        {...(e.kind === "outlook-event" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                         className={cn(
                           "block truncate rounded px-1 py-0.5 text-[10px] font-medium",
                           e.kind === "shoot" && "bg-primary/15 text-primary",
                           e.kind === "project-deadline" && "bg-warning/20 text-warning-foreground",
-                          e.kind === "deliverable-deadline" && "bg-accent text-accent-foreground"
+                          e.kind === "deliverable-deadline" && "bg-accent text-accent-foreground",
+                          e.kind === "outlook-event" && "bg-sky-500/15 text-sky-600 dark:text-sky-400"
                         )}
                         title={e.title}
                       >
@@ -188,6 +240,9 @@ export function CalendarView({
             <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-primary" /> Shoot</span>
             <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-warning" /> Project deadline</span>
             <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-accent-foreground" /> Deliverable deadline</span>
+            {microsoftConnected && (
+              <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-sky-500" /> Outlook</span>
+            )}
           </div>
         </div>
       )}
@@ -207,6 +262,12 @@ function EventIcon({ kind }: { kind: CalEvent["kind"] }) {
     return (
       <div className={cn(cls, "bg-warning/20 text-warning-foreground")}>
         <Clapperboard className="size-4" />
+      </div>
+    );
+  if (kind === "outlook-event")
+    return (
+      <div className={cn(cls, "bg-sky-500/15 text-sky-600 dark:text-sky-400")}>
+        <Mail className="size-4" />
       </div>
     );
   return (

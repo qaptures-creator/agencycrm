@@ -163,6 +163,8 @@ export const DEFAULT_DELIVERABLE_STATUSES = [
   { name: "Delivered", color: "#10b981", isTerminal: true },
 ];
 
+export const SWATCH_COLORS = ["#6366f1", "#8b5cf6", "#d946ef", "#f59e0b", "#22c55e", "#06b6d4", "#ef4444", "#64748b"];
+
 export function labelFor<T extends { value: string; label: string }>(
   list: T[],
   value: string | null | undefined

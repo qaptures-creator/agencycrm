@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Agency CRM",
+  title: "PRMOTE",
   description: "Central dashboard for leads, clients, shoots, content and finance.",
 };
 

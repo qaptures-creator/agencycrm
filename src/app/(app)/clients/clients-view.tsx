@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Building2, Globe, AtSign } from "lucide-react";
+import { Plus, Search, Building2, Globe, AtSign, RefreshCcw, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -24,6 +24,54 @@ type ClientWithMeta = Client & {
   _count: { projects: number; deliverables: number; invoices: number };
 };
 
+function ClientCard({ client }: { client: ClientWithMeta }) {
+  return (
+    <Link href={`/clients/${client.id}`}>
+      <Card className="h-full border-l-4 p-5 transition-shadow hover:shadow-md" style={{ borderLeftColor: client.color }}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate font-semibold">{client.companyName}</p>
+            <p className="truncate text-sm text-muted-foreground">{client.mainContactName}</p>
+          </div>
+          <StatusBadge list={CLIENT_STATUSES} value={client.status} />
+        </div>
+
+        <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+          {client.website && (
+            <div className="flex items-center gap-1.5 truncate">
+              <Globe className="size-3 shrink-0" /> {client.website}
+            </div>
+          )}
+          {client.instagram && (
+            <div className="flex items-center gap-1.5 truncate">
+              <AtSign className="size-3 shrink-0" /> {client.instagram}
+            </div>
+          )}
+        </div>
+
+        {client.services.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1">
+            {client.services.slice(0, 3).map((s) => (
+              <Badge key={s.id} variant="secondary" className="text-[10px]">
+                {s.name}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs">
+          <span className="text-muted-foreground">
+            {client._count.projects} project{client._count.projects === 1 ? "" : "s"}
+          </span>
+          <span className="font-medium">
+            {client.monthlyRetainer ? `${formatCurrency(client.monthlyRetainer)}/mo` : "One-off"}
+          </span>
+        </div>
+      </Card>
+    </Link>
+  );
+}
+
 export function ClientsView({ clients, services }: { clients: ClientWithMeta[]; services: ServiceOption[] }) {
   const router = useRouter();
   const [query, setQuery] = React.useState("");
@@ -39,6 +87,9 @@ export function ClientsView({ clients, services }: { clients: ClientWithMeta[]; 
     }
     return true;
   });
+
+  const retainerClients = filtered.filter((c) => c.monthlyRetainer);
+  const oneOffClients = filtered.filter((c) => !c.monthlyRetainer);
 
   const mrr = clients
     .filter((c) => c.status === "ACTIVE")
@@ -92,52 +143,36 @@ export function ClientsView({ clients, services }: { clients: ClientWithMeta[]; 
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((client) => (
-            <Link key={client.id} href={`/clients/${client.id}`}>
-              <Card className="h-full p-5 transition-shadow hover:shadow-md">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{client.companyName}</p>
-                    <p className="truncate text-sm text-muted-foreground">{client.mainContactName}</p>
-                  </div>
-                  <StatusBadge list={CLIENT_STATUSES} value={client.status} />
-                </div>
+        <div className="space-y-8">
+          {retainerClients.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <RefreshCcw className="size-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold">Retainer Clients</h2>
+                <span className="text-xs text-muted-foreground">({retainerClients.length})</span>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {retainerClients.map((client) => (
+                  <ClientCard key={client.id} client={client} />
+                ))}
+              </div>
+            </div>
+          )}
 
-                <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                  {client.website && (
-                    <div className="flex items-center gap-1.5 truncate">
-                      <Globe className="size-3 shrink-0" /> {client.website}
-                    </div>
-                  )}
-                  {client.instagram && (
-                    <div className="flex items-center gap-1.5 truncate">
-                      <AtSign className="size-3 shrink-0" /> {client.instagram}
-                    </div>
-                  )}
-                </div>
-
-                {client.services.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {client.services.slice(0, 3).map((s) => (
-                      <Badge key={s.id} variant="secondary" className="text-[10px]">
-                        {s.name}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs">
-                  <span className="text-muted-foreground">
-                    {client._count.projects} project{client._count.projects === 1 ? "" : "s"}
-                  </span>
-                  <span className="font-medium">
-                    {client.monthlyRetainer ? `${formatCurrency(client.monthlyRetainer)}/mo` : "One-off"}
-                  </span>
-                </div>
-              </Card>
-            </Link>
-          ))}
+          {oneOffClients.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Briefcase className="size-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold">One-off Projects</h2>
+                <span className="text-xs text-muted-foreground">({oneOffClients.length})</span>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {oneOffClients.map((client) => (
+                  <ClientCard key={client.id} client={client} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

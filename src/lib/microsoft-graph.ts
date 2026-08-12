@@ -39,6 +39,27 @@ export async function listRecentMessages(top = 8): Promise<GraphMessage[]> {
   return data.value ?? [];
 }
 
+export type GraphEvent = {
+  id: string;
+  subject: string;
+  start: { dateTime: string; timeZone: string };
+  end: { dateTime: string; timeZone: string };
+  isAllDay: boolean;
+  location: { displayName: string } | null;
+  webLink: string;
+};
+
+/** Outlook calendar events within [start, end] (ISO strings), for the Calendar page. */
+export async function listCalendarEvents(start: string, end: string): Promise<GraphEvent[]> {
+  const res = await graphFetch(
+    `/me/calendarView?startDateTime=${encodeURIComponent(start)}&endDateTime=${encodeURIComponent(end)}` +
+      `&$select=subject,start,end,isAllDay,location,webLink&$orderby=start/dateTime&$top=100`,
+    { headers: { Prefer: 'outlook.timezone="UTC"' } }
+  );
+  const data = await res.json();
+  return data.value ?? [];
+}
+
 const MAX_SIMPLE_UPLOAD_BYTES = 4 * 1024 * 1024; // Graph's simple-upload endpoint caps at 4MB.
 
 function sanitizeSegment(name: string) {
@@ -57,7 +78,7 @@ export async function uploadClientDocument(
 
   const folder = sanitizeSegment(clientName);
   const file = sanitizeSegment(fileName);
-  const path = `/me/drive/root:/Agency CRM/${encodeURIComponent(folder)}/${encodeURIComponent(file)}:/content`;
+  const path = `/me/drive/root:/PRMOTE/${encodeURIComponent(folder)}/${encodeURIComponent(file)}:/content`;
 
   const res = await graphFetch(path, {
     method: "PUT",

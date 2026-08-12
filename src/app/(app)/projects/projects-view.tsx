@@ -156,9 +156,17 @@ export function ProjectsView({
                       </span>
                     </div>
                     {items.map((p) => (
-                      <Card key={p.id} className="cursor-pointer p-3 shadow-sm transition-shadow hover:shadow-md" onClick={() => openEdit(p)}>
+                      <Card
+                        key={p.id}
+                        className="cursor-pointer border-l-4 p-3 shadow-sm transition-shadow hover:shadow-md"
+                        style={{ borderLeftColor: p.client.color }}
+                        onClick={() => openEdit(p)}
+                      >
                         <p className="truncate text-sm font-medium">{p.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{p.client.companyName}</p>
+                        <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                          <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: p.client.color }} />
+                          {p.client.companyName}
+                        </p>
                         {p.shootDate && (
                           <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
                             <CalendarIcon className="size-3" /> {formatDate(p.shootDate)}
@@ -190,7 +198,12 @@ export function ProjectsView({
                   {filtered.map((p) => (
                     <TableRow key={p.id} className="cursor-pointer" onClick={() => openEdit(p)}>
                       <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{p.client.companyName}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: p.client.color }} />
+                          {p.client.companyName}
+                        </span>
+                      </TableCell>
                       <TableCell><StatusBadge list={PROJECT_STATUSES} value={p.status} /></TableCell>
                       <TableCell>{formatDate(p.shootDate)}</TableCell>
                       <TableCell className="text-muted-foreground">

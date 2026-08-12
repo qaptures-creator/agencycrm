@@ -152,7 +152,7 @@ export function DocumentsTab({
           <div className="space-y-1.5">
             <Label htmlFor="file">File</Label>
             <Input id="file" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-            <p className="text-xs text-muted-foreground">Up to 4MB. Stored in OneDrive under &ldquo;Agency CRM / {client.companyName}&rdquo;.</p>
+            <p className="text-xs text-muted-foreground">Up to 4MB. Stored in OneDrive under &ldquo;PRMOTE / {client.companyName}&rdquo;.</p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>

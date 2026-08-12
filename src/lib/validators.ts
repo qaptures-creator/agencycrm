@@ -58,6 +58,7 @@ export const clientSchema = z.object({
   contractEnd: optionalDate,
   paymentStatus: z.string().default("CURRENT"),
   status: z.string().default("ACTIVE"),
+  color: z.string().default("#6366f1"),
   notes: optionalString,
   serviceIds: z.array(z.string()).optional().default([]),
 });

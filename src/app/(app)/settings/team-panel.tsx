@@ -23,9 +23,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createUser, updateUser, deleteUser } from "@/actions/users";
+import { SWATCH_COLORS as COLORS } from "@/lib/constants";
 import type { User } from "@prisma/client";
-
-const COLORS = ["#6366f1", "#8b5cf6", "#d946ef", "#f59e0b", "#22c55e", "#06b6d4", "#ef4444", "#64748b"];
 
 export function TeamPanel({ users }: { users: User[] }) {
   const router = useRouter();

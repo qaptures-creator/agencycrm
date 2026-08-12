@@ -127,6 +127,7 @@ model Client {
   contractEnd     DateTime?
   paymentStatus   String    @default("CURRENT") // CURRENT | OVERDUE | PAUSED
   status          String    @default("ACTIVE") // ACTIVE | PAUSED | CHURNED
+  color           String    @default("#6366f1")
   notes           String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
