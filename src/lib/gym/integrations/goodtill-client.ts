@@ -406,6 +406,22 @@ export async function getGoodtillSales(params: {
   });
 }
 
+/** Non-secret diagnostic info to help debug misconfiguration: the exact
+ * URL that would be called and a length/preview of the subdomain, but
+ * never the username or password. */
+export function getGoodtillDiagnosticEnvSummary():
+  | { configured: true; attemptedLoginUrl: string; subdomainPreview: string }
+  | { configured: false; error: string } {
+  try {
+    const env = readEnv();
+    const subdomainPreview =
+      env.subdomain.length > 4 ? `${env.subdomain.slice(0, 2)}***${env.subdomain.slice(-2)}` : "***";
+    return { configured: true, attemptedLoginUrl: `${env.apiUrl}/login`, subdomainPreview };
+  } catch (err) {
+    return { configured: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 /** Logs in (or reuses the cached token) and confirms the connection is
  * live. Returns a redacted summary only — never the token itself. */
 export async function testGoodtillConnection(): Promise<

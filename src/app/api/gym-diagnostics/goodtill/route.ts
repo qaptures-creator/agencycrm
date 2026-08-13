@@ -5,6 +5,7 @@ import {
   getGoodtillCategories,
   getGoodtillProducts,
   getGoodtillProductInventory,
+  getGoodtillDiagnosticEnvSummary,
 } from "@/lib/gym/integrations/goodtill-client";
 
 /**
@@ -24,7 +25,7 @@ export async function GET(req: Request) {
 
   const connection = await testGoodtillConnection();
   if (!connection.ok) {
-    return NextResponse.json({ connection }, { status: 502 });
+    return NextResponse.json({ connection, env: getGoodtillDiagnosticEnvSummary() }, { status: 502 });
   }
 
   async function sample<T>(label: string, fn: () => Promise<T[]>) {
