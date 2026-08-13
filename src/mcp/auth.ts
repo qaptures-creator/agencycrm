@@ -1,11 +1,18 @@
-// Bearer-token auth for the MCP endpoint. This is a private, single-tenant
-// integration (the CRM itself has no login system at all — see
-// MCP_SETUP.md), so a shared-secret API key checked with a timing-safe
-// comparison is the right amount of security here, not a full OAuth
-// authorization server. ChatGPT's connector "API key" auth mode sends
-// exactly this: `Authorization: Bearer <key>` on every request.
+// Auth for the MCP endpoint, used as the `verifyToken` callback for
+// mcp-handler's `withMcpAuth` (see src/app/api/mcp/route.ts).
+//
+// Two credentials are accepted, checked in this order:
+//   1. A WorkOS-issued OAuth access token (verified via src/mcp/oauth.ts) —
+//      the real, ChatGPT-compatible path.
+//   2. The legacy static PRMOTE_MCP_API_KEY, kept only as a temporary
+//      fallback per explicit instruction while the OAuth path is being
+//      proven out. Remove once ChatGPT OAuth is confirmed working
+//      end-to-end (see MCP_SETUP.md).
+// A request with neither is rejected — there is no anonymous path.
 
 import { createHash, timingSafeEqual } from "node:crypto";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import { isOAuthConfigured, verifyWorkosAccessToken } from "@/mcp/oauth";
 
 function safeEqual(a: string, b: string) {
   const ah = createHash("sha256").update(a).digest();
@@ -13,23 +20,34 @@ function safeEqual(a: string, b: string) {
   return timingSafeEqual(ah, bh);
 }
 
-export function checkMcpAuth(req: Request): Response | null {
-  const configuredKey = process.env.PRMOTE_MCP_API_KEY;
-  if (!configuredKey) {
-    return Response.json(
-      { error: "PRMOTE MCP is not configured (missing PRMOTE_MCP_API_KEY on the server)." },
-      { status: 503 }
-    );
+export function isMcpAuthConfigured() {
+  return isOAuthConfigured() || Boolean(process.env.PRMOTE_MCP_API_KEY);
+}
+
+export async function verifyMcpBearerToken(_req: Request, bearerToken?: string): Promise<AuthInfo | undefined> {
+  if (!bearerToken) return undefined;
+
+  if (isOAuthConfigured()) {
+    try {
+      const { payload, scopes } = await verifyWorkosAccessToken(bearerToken);
+      const clientId = typeof payload.client_id === "string" ? payload.client_id : (payload.sub ?? "workos-user");
+      return {
+        token: bearerToken,
+        clientId,
+        scopes,
+        expiresAt: payload.exp,
+      };
+    } catch {
+      // Not a valid WorkOS token — fall through to the legacy key check
+      // below rather than rejecting immediately, since both paths are
+      // accepted during the transition.
+    }
   }
 
-  const authHeader = req.headers.get("authorization") ?? "";
-  const [scheme, token] = authHeader.split(" ");
-  if (scheme !== "Bearer" || !token || !safeEqual(token, configuredKey)) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "content-type": "application/json", "www-authenticate": 'Bearer realm="PRMOTE MCP"' },
-    });
+  const legacyKey = process.env.PRMOTE_MCP_API_KEY;
+  if (legacyKey && safeEqual(bearerToken, legacyKey)) {
+    return { token: bearerToken, clientId: "legacy-api-key", scopes: ["legacy"] };
   }
 
-  return null;
+  return undefined;
 }
