@@ -15,7 +15,13 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await runGoodtillHistoricalImport();
+    const url = new URL(req.url);
+    const fromParam = url.searchParams.get("from");
+    const toParam = url.searchParams.get("to");
+    const result = await runGoodtillHistoricalImport({
+      from: fromParam ? new Date(fromParam) : undefined,
+      to: toParam ? new Date(toParam) : undefined,
+    });
     return NextResponse.json({ ok: true, result });
   } catch (err) {
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "Unknown error" }, { status: 502 });
