@@ -63,7 +63,12 @@ function readEnv(): GoodtillEnv {
   if (!password) missing.push("GOODTILL_PASSWORD");
   if (missing.length > 0) throw new GoodtillNotConfiguredError(missing);
 
-  return { apiUrl: apiUrl!.replace(/\/+$/, ""), subdomain: subdomain!, username: username!, password: password! };
+  // The official base URL is https://api.thegoodtill.com/api — normalize in
+  // case the configured value omits the /api path segment.
+  let normalizedApiUrl = apiUrl!.replace(/\/+$/, "");
+  if (!/\/api$/i.test(normalizedApiUrl)) normalizedApiUrl += "/api";
+
+  return { apiUrl: normalizedApiUrl, subdomain: subdomain!, username: username!, password: password! };
 }
 
 type TokenCache = {
