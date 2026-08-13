@@ -123,6 +123,7 @@ model Client {
   instagram       String?
   website         String?
   monthlyRetainer Float?
+  oneOffValue     Float?
   contractStart   DateTime?
   contractEnd     DateTime?
   paymentStatus   String    @default("CURRENT") // CURRENT | OVERDUE | PAUSED

@@ -59,6 +59,7 @@ export function ClientForm({
       instagram: client?.instagram ?? leadDefaults?.instagram ?? "",
       website: client?.website ?? leadDefaults?.website ?? "",
       monthlyRetainer: client?.monthlyRetainer ?? undefined,
+      oneOffValue: client?.oneOffValue ?? undefined,
       contractStart: toDateInputValue(client?.contractStart),
       contractEnd: toDateInputValue(client?.contractEnd),
       paymentStatus: client?.paymentStatus ?? "CURRENT",
@@ -120,6 +121,12 @@ export function ClientForm({
           <Input id="monthlyRetainer" type="number" min={0} {...register("monthlyRetainer")} placeholder="e.g. 3000" />
         </div>
         <div className="col-span-2 sm:col-span-1 space-y-1.5">
+          <Label htmlFor="oneOffValue">One-off Project Value</Label>
+          <Input id="oneOffValue" type="number" min={0} {...register("oneOffValue")} placeholder="e.g. 1500" />
+          <p className="text-xs text-muted-foreground">Leave Monthly Retainer blank to list this client under One-off Projects.</p>
+        </div>
+
+        <div className="col-span-2 sm:col-span-1 space-y-1.5">
           <Label htmlFor="status">Client Status</Label>
           <Controller
             control={control}
@@ -140,16 +147,6 @@ export function ClientForm({
             )}
           />
         </div>
-
-        <div className="col-span-2 sm:col-span-1 space-y-1.5">
-          <Label htmlFor="contractStart">Contract Start</Label>
-          <Input id="contractStart" type="date" {...register("contractStart")} />
-        </div>
-        <div className="col-span-2 sm:col-span-1 space-y-1.5">
-          <Label htmlFor="contractEnd">Contract Renewal / End</Label>
-          <Input id="contractEnd" type="date" {...register("contractEnd")} />
-        </div>
-
         <div className="col-span-2 sm:col-span-1 space-y-1.5">
           <Label htmlFor="paymentStatus">Payment Status</Label>
           <Controller
@@ -170,6 +167,15 @@ export function ClientForm({
               </Select>
             )}
           />
+        </div>
+
+        <div className="col-span-2 sm:col-span-1 space-y-1.5">
+          <Label htmlFor="contractStart">Contract Start</Label>
+          <Input id="contractStart" type="date" {...register("contractStart")} />
+        </div>
+        <div className="col-span-2 sm:col-span-1 space-y-1.5">
+          <Label htmlFor="contractEnd">Contract Renewal / End</Label>
+          <Input id="contractEnd" type="date" {...register("contractEnd")} />
         </div>
 
         <div className="col-span-2 space-y-1.5">

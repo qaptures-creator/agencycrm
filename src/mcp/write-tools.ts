@@ -167,6 +167,7 @@ export function registerWriteTools(server: McpServer) {
         instagram: optionalText(100),
         website: optionalText(300),
         monthlyRetainer: z.number().min(0).max(1_000_000).optional(),
+        oneOffValue: z.number().min(0).max(1_000_000).optional(),
         status: clientStatusEnum.optional(),
         paymentStatus: clientPaymentStatusEnum.optional(),
         notes: optionalText(5000),
@@ -180,6 +181,7 @@ export function registerWriteTools(server: McpServer) {
       instagram?: string;
       website?: string;
       monthlyRetainer?: number;
+      oneOffValue?: number;
       status?: string;
       paymentStatus?: string;
       notes?: string;
@@ -204,6 +206,7 @@ export function registerWriteTools(server: McpServer) {
         instagram: optionalText(100),
         website: optionalText(300),
         monthlyRetainer: z.number().min(0).max(1_000_000).optional(),
+        oneOffValue: z.number().min(0).max(1_000_000).optional(),
         status: clientStatusEnum.optional(),
         paymentStatus: clientPaymentStatusEnum.optional(),
         notes: optionalText(5000),

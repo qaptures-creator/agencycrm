@@ -19,7 +19,11 @@ export function OverviewTab({ client }: { client: ClientWithExtras }) {
           <CardTitle>Contract & Billing</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-          <Field label="Monthly Retainer" value={client.monthlyRetainer ? formatCurrency(client.monthlyRetainer) : "One-off client"} />
+          {client.monthlyRetainer ? (
+            <Field label="Monthly Retainer" value={formatCurrency(client.monthlyRetainer)} />
+          ) : (
+            <Field label="One-off Project Value" value={client.oneOffValue ? formatCurrency(client.oneOffValue) : "—"} />
+          )}
           <Field label="Contract Start" value={formatDate(client.contractStart)} />
           <Field label="Contract Renewal / End" value={formatDate(client.contractEnd)} />
           <Field label="Payment Status" value={<StatusBadge list={CLIENT_PAYMENT_STATUSES} value={client.paymentStatus} />} />

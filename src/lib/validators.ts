@@ -54,6 +54,7 @@ export const clientSchema = z.object({
   instagram: optionalString,
   website: optionalString,
   monthlyRetainer: optionalNumber,
+  oneOffValue: optionalNumber,
   contractStart: optionalDate,
   contractEnd: optionalDate,
   paymentStatus: z.string().default("CURRENT"),

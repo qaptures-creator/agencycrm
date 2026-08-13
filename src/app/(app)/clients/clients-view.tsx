@@ -64,7 +64,11 @@ function ClientCard({ client }: { client: ClientWithMeta }) {
             {client._count.projects} project{client._count.projects === 1 ? "" : "s"}
           </span>
           <span className="font-medium">
-            {client.monthlyRetainer ? `${formatCurrency(client.monthlyRetainer)}/mo` : "One-off"}
+            {client.monthlyRetainer
+              ? `${formatCurrency(client.monthlyRetainer)}/mo`
+              : client.oneOffValue
+                ? formatCurrency(client.oneOffValue)
+                : "One-off"}
           </span>
         </div>
       </Card>
