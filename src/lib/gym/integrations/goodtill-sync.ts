@@ -177,20 +177,29 @@ export async function syncGoodtillSaleById(saleId: string, source: "WEBHOOK" | "
 const HISTORICAL_PAGE_LIMIT = 50;
 const HISTORICAL_MAX_PAGES = 500; // safety cap (~25k sales)
 
+const DEFAULT_HISTORY_LOOKBACK_MS = 2 * 365 * 24 * 60 * 60 * 1000; // 2 years
+
 /** Paginated backfill/reconciliation sweep. Safe to re-run — every sale is
- * upserted by its Goodtill id, so nothing is duplicated. */
+ * upserted by its Goodtill id, so nothing is duplicated.
+ *
+ * `from` defaults to a 2-year lookback rather than being left unbounded:
+ * despite the docs marking it optional, an omitted `from` empirically
+ * returns zero results rather than "all time" — confirmed against the
+ * real API, not assumed. */
 export async function importGoodtillSalesHistory(options?: {
   from?: Date;
   to?: Date;
 }): Promise<{ imported: number; pages: number }> {
+  const from = options?.from ?? new Date(Date.now() - DEFAULT_HISTORY_LOOKBACK_MS);
+  const to = options?.to ?? new Date();
   let offset = 0;
   let imported = 0;
   let pages = 0;
 
   while (pages < HISTORICAL_MAX_PAGES) {
     const page = await getGoodtillSalesDetailsPage({
-      from: options?.from,
-      to: options?.to,
+      from,
+      to,
       limit: HISTORICAL_PAGE_LIMIT,
       offset,
       includeVoided: true,
