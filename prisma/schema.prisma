@@ -26,12 +26,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignedLeads         Lead[]        @relation("LeadAssignee")
-  activities            Activity[]    @relation("ActivityCreatedBy")
-  videographerProjects  Project[]     @relation("ProjectVideographer")
-  photographerProjects  Project[]     @relation("ProjectPhotographer")
-  editorProjects        Project[]     @relation("ProjectEditor")
-  editorDeliverables    Deliverable[] @relation("DeliverableEditor")
+  assignedLeads        Lead[]        @relation("LeadAssignee")
+  activities           Activity[]    @relation("ActivityCreatedBy")
+  videographerProjects Project[]     @relation("ProjectVideographer")
+  photographerProjects Project[]     @relation("ProjectPhotographer")
+  editorProjects       Project[]     @relation("ProjectEditor")
+  editorDeliverables   Deliverable[] @relation("DeliverableEditor")
 }
 
 // ---------------------------------------------------------------------------
@@ -299,35 +299,35 @@ model Activity {
 // ---------------------------------------------------------------------------
 
 model GymUser {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  passwordHash String
-  accessRole   String    @default("STAFF") // OWNER | MANAGER | STAFF | MARKETING
-  active       Boolean   @default(true)
-  mustResetPassword Boolean @default(false)
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  name              String
+  email             String    @unique
+  passwordHash      String
+  accessRole        String    @default("STAFF") // OWNER | MANAGER | STAFF | MARKETING
+  active            Boolean   @default(true)
+  mustResetPassword Boolean   @default(false)
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   staff GymStaff?
 
-  sessions           GymSession[]
-  notifications      GymNotification[]
-  createdAnnouncements GymAnnouncement[]      @relation("AnnouncementCreatedBy")
-  taskComments       GymTaskComment[]         @relation("TaskCommentAuthor")
-  tasksCreated       GymTask[]                @relation("TaskCreatedBy")
-  enquiryMessages    GymEnquiryMessage[]      @relation("EnquiryMessageAuthor")
-  memberNotes        GymMemberNote[]          @relation("MemberNoteAuthor")
-  leadActivities     GymLeadActivity[]        @relation("LeadActivityCreatedBy")
-  membershipEvents   GymMembershipEvent[]     @relation("MembershipEventCreatedBy")
-  incidentsReported  GymIncident[]            @relation("IncidentReportedBy")
-  auditLogs          GymAuditLog[]
-  inventoryTxns      GymInventoryTransaction[] @relation("InventoryTxnCreatedBy")
-  attachmentsUploaded GymAttachment[]         @relation("AttachmentUploadedBy")
-  resetTokens        GymPasswordResetToken[]
-  cleaningTasksCreated   GymCleaningTask[]    @relation("CleaningTaskCreatedBy")
-  cleaningTasksCompleted GymCleaningTask[]    @relation("CleaningTaskCompletedBy")
+  sessions               GymSession[]
+  notifications          GymNotification[]
+  createdAnnouncements   GymAnnouncement[]         @relation("AnnouncementCreatedBy")
+  taskComments           GymTaskComment[]          @relation("TaskCommentAuthor")
+  tasksCreated           GymTask[]                 @relation("TaskCreatedBy")
+  enquiryMessages        GymEnquiryMessage[]       @relation("EnquiryMessageAuthor")
+  memberNotes            GymMemberNote[]           @relation("MemberNoteAuthor")
+  leadActivities         GymLeadActivity[]         @relation("LeadActivityCreatedBy")
+  membershipEvents       GymMembershipEvent[]      @relation("MembershipEventCreatedBy")
+  incidentsReported      GymIncident[]             @relation("IncidentReportedBy")
+  auditLogs              GymAuditLog[]
+  inventoryTxns          GymInventoryTransaction[] @relation("InventoryTxnCreatedBy")
+  attachmentsUploaded    GymAttachment[]           @relation("AttachmentUploadedBy")
+  resetTokens            GymPasswordResetToken[]
+  cleaningTasksCreated   GymCleaningTask[]         @relation("CleaningTaskCreatedBy")
+  cleaningTasksCompleted GymCleaningTask[]         @relation("CleaningTaskCompletedBy")
 
   @@index([accessRole])
 }
@@ -377,15 +377,15 @@ model GymStaff {
   user   GymUser? @relation(fields: [userId], references: [id])
   userId String?  @unique
 
-  shifts             GymRotaShift[]
-  attendance         GymAttendance[]
-  tasksAssigned      GymTask[]              @relation("TaskAssignee")
-  enquiriesAssigned  GymEnquiry[]           @relation("EnquiryAssignee")
-  leadsAssigned      GymLead[]              @relation("LeadAssignee")
-  maintenanceReported GymMaintenanceTicket[] @relation("MaintenanceReportedBy")
-  maintenanceAssigned GymMaintenanceTicket[] @relation("MaintenanceAssignee")
-  contentOwned       GymMarketingContent[]  @relation("ContentOwner")
-  cleaningTasksAssigned GymCleaningTask[]    @relation("CleaningTaskAssignee")
+  shifts                GymRotaShift[]
+  attendance            GymAttendance[]
+  tasksAssigned         GymTask[]              @relation("TaskAssignee")
+  enquiriesAssigned     GymEnquiry[]           @relation("EnquiryAssignee")
+  leadsAssigned         GymLead[]              @relation("LeadAssignee")
+  maintenanceReported   GymMaintenanceTicket[] @relation("MaintenanceReportedBy")
+  maintenanceAssigned   GymMaintenanceTicket[] @relation("MaintenanceAssignee")
+  contentOwned          GymMarketingContent[]  @relation("ContentOwner")
+  cleaningTasksAssigned GymCleaningTask[]      @relation("CleaningTaskAssignee")
 
   @@index([position])
 }
@@ -395,16 +395,16 @@ model GymStaff {
 // ---------------------------------------------------------------------------
 
 model GymRotaShift {
-  id            String    @id @default(cuid())
-  date          DateTime  @db.Date
-  startTime     DateTime
-  endTime       DateTime
-  breakMinutes  Int       @default(0)
-  shiftRole     String?
-  notes         String?
-  published     Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String   @id @default(cuid())
+  date         DateTime @db.Date
+  startTime    DateTime
+  endTime      DateTime
+  breakMinutes Int      @default(0)
+  shiftRole    String?
+  notes        String?
+  published    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   staff   GymStaff @relation(fields: [staffId], references: [id], onDelete: Cascade)
   staffId String
@@ -416,10 +416,10 @@ model GymRotaShift {
 }
 
 model GymAttendance {
-  id           String    @id @default(cuid())
-  clockInAt    DateTime?
-  clockOutAt   DateTime?
-  createdAt    DateTime  @default(now())
+  id         String    @id @default(cuid())
+  clockInAt  DateTime?
+  clockOutAt DateTime?
+  createdAt  DateTime  @default(now())
 
   staff   GymStaff @relation(fields: [staffId], references: [id], onDelete: Cascade)
   staffId String
@@ -436,19 +436,19 @@ model GymAttendance {
 // ---------------------------------------------------------------------------
 
 model GymTask {
-  id          String    @id @default(cuid())
-  title       String
-  description String?
-  dueDate     DateTime?
-  dueTime     String?
-  priority    String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
-  category    String    @default("OTHER") // CLEANING | CUSTOMER_SERVICE | MEMBERSHIP | EQUIPMENT | MAINTENANCE | SHAKE_BAR | MARKETING | ADMIN | HEALTH_SAFETY | OTHER
-  recurrence  String    @default("ONE_OFF") // ONE_OFF | DAILY | WEEKLY
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  dueDate       DateTime?
+  dueTime       String?
+  priority      String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  category      String    @default("OTHER") // CLEANING | CUSTOMER_SERVICE | MEMBERSHIP | EQUIPMENT | MAINTENANCE | SHAKE_BAR | MARKETING | ADMIN | HEALTH_SAFETY | OTHER
+  recurrence    String    @default("ONE_OFF") // ONE_OFF | DAILY | WEEKLY
   recurrenceDay String? // MON..SUN, for WEEKLY
-  status      String    @default("TODO") // TODO | IN_PROGRESS | COMPLETED | OVERDUE
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  status        String    @default("TODO") // TODO | IN_PROGRESS | COMPLETED | OVERDUE
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   assignedTo   GymStaff? @relation("TaskAssignee", fields: [assignedToId], references: [id])
   assignedToId String?
@@ -538,19 +538,19 @@ model GymMembershipPlan {
 }
 
 model GymMembership {
-  id              String    @id @default(cuid())
-  startDate       DateTime  @default(now())
-  renewalDate     DateTime?
-  status          String    @default("ACTIVE") // ACTIVE | FROZEN | CANCELLED | EXPIRED | OVERDUE
-  billingAmount   Float
-  paymentFrequency String   @default("MONTHLY")
-  paymentStatus   String    @default("CURRENT") // CURRENT | OVERDUE | FAILED
-  freezeStart     DateTime?
-  freezeEnd       DateTime?
-  cancelledAt     DateTime?
-  source          String    @default("MANUAL") // MANUAL | ASHBOURNE
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  startDate        DateTime  @default(now())
+  renewalDate      DateTime?
+  status           String    @default("ACTIVE") // ACTIVE | FROZEN | CANCELLED | EXPIRED | OVERDUE
+  billingAmount    Float
+  paymentFrequency String    @default("MONTHLY")
+  paymentStatus    String    @default("CURRENT") // CURRENT | OVERDUE | FAILED
+  freezeStart      DateTime?
+  freezeEnd        DateTime?
+  cancelledAt      DateTime?
+  source           String    @default("MANUAL") // MANUAL | ASHBOURNE
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   member   GymMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
   memberId String
@@ -581,14 +581,14 @@ model GymMembershipEvent {
 }
 
 model GymPayment {
-  id              String   @id @default(cuid())
-  transactionRef  String?
-  date            DateTime @default(now())
-  amount          Float
-  type            String   @default("MEMBERSHIP") // MEMBERSHIP | JOINING_FEE | DAY_PASS | OTHER
-  status          String   @default("PAID") // PAID | PENDING | FAILED | REFUNDED
-  provider        String   @default("ASHBOURNE")
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  transactionRef String?
+  date           DateTime @default(now())
+  amount         Float
+  type           String   @default("MEMBERSHIP") // MEMBERSHIP | JOINING_FEE | DAY_PASS | OTHER
+  status         String   @default("PAID") // PAID | PENDING | FAILED | REFUNDED
+  provider       String   @default("ASHBOURNE")
+  createdAt      DateTime @default(now())
 
   member   GymMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
   memberId String?
@@ -603,25 +603,25 @@ model GymPayment {
 // ---------------------------------------------------------------------------
 
 model GymEnquiry {
-  id           String    @id @default(cuid())
-  name         String
-  email        String?
-  phone        String?
-  subject      String?
-  category     String    @default("OTHER") // MEMBERSHIP | DAY_PASS | GENERAL | CANCELLATION | PAYMENT | COMPLAINT | PERSONAL_TRAINING | FACILITIES | BUSINESS | OTHER
-  status       String    @default("NEW") // NEW | REPLIED | AWAITING_RESPONSE | FOLLOW_UP | CONVERTED | CLOSED
-  priority     String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
-  source       String    @default("MANUAL") // EMAIL | WEBSITE | PHONE | WALK_IN | MANUAL
-  followUpAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id         String    @id @default(cuid())
+  name       String
+  email      String?
+  phone      String?
+  subject    String?
+  category   String    @default("OTHER") // MEMBERSHIP | DAY_PASS | GENERAL | CANCELLATION | PAYMENT | COMPLAINT | PERSONAL_TRAINING | FACILITIES | BUSINESS | OTHER
+  status     String    @default("NEW") // NEW | REPLIED | AWAITING_RESPONSE | FOLLOW_UP | CONVERTED | CLOSED
+  priority   String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  source     String    @default("MANUAL") // EMAIL | WEBSITE | PHONE | WALK_IN | MANUAL
+  followUpAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   assignedTo   GymStaff? @relation("EnquiryAssignee", fields: [assignedToId], references: [id])
   assignedToId String?
 
-  convertedToLead   GymLead? @relation("LeadFromEnquiry")
-  convertedMember    GymMember? @relation("EnquiryConvertedMember", fields: [convertedMemberId], references: [id])
-  convertedMemberId  String?
+  convertedToLead   GymLead?   @relation("LeadFromEnquiry")
+  convertedMember   GymMember? @relation("EnquiryConvertedMember", fields: [convertedMemberId], references: [id])
+  convertedMemberId String?
 
   messages GymEnquiryMessage[]
 
@@ -703,21 +703,21 @@ model GymLeadActivity {
 // ---------------------------------------------------------------------------
 
 model GymEquipment {
-  id               String    @id @default(cuid())
-  name             String
-  manufacturer     String?
-  model            String?
-  category         String    @default("OTHER") // CHEST | BACK | SHOULDERS | ARMS | LEGS | CARDIO | FREE_WEIGHTS | OTHER
-  serialNumber     String?
-  purchaseDate     DateTime?
-  condition        String    @default("GOOD") // EXCELLENT | GOOD | NEEDS_ATTENTION | OUT_OF_SERVICE
-  lastServiceDate  DateTime?
-  nextServiceDate  DateTime?
-  location         String?
-  notes            String?
-  photoUrl         String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  name            String
+  manufacturer    String?
+  model           String?
+  category        String    @default("OTHER") // CHEST | BACK | SHOULDERS | ARMS | LEGS | CARDIO | FREE_WEIGHTS | OTHER
+  serialNumber    String?
+  purchaseDate    DateTime?
+  condition       String    @default("GOOD") // EXCELLENT | GOOD | NEEDS_ATTENTION | OUT_OF_SERVICE
+  lastServiceDate DateTime?
+  nextServiceDate DateTime?
+  location        String?
+  notes           String?
+  photoUrl        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   maintenanceTickets GymMaintenanceTicket[]
 
@@ -773,17 +773,17 @@ model GymCleaningTask {
 }
 
 model GymMaintenanceTicket {
-  id               String    @id @default(cuid())
-  issue            String
-  area             String?
-  priority         String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
-  reportedAt       DateTime  @default(now())
-  photoUrl         String?
-  status           String    @default("REPORTED") // REPORTED | INVESTIGATING | SCHEDULED | IN_PROGRESS | FIXED
-  resolutionNotes  String?
-  resolvedAt       DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  issue           String
+  area            String?
+  priority        String    @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  reportedAt      DateTime  @default(now())
+  photoUrl        String?
+  status          String    @default("REPORTED") // REPORTED | INVESTIGATING | SCHEDULED | IN_PROGRESS | FIXED
+  resolutionNotes String?
+  resolvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   equipment   GymEquipment? @relation(fields: [equipmentId], references: [id], onDelete: SetNull)
   equipmentId String?
@@ -803,17 +803,17 @@ model GymMaintenanceTicket {
 // ---------------------------------------------------------------------------
 
 model GymIncident {
-  id                String    @id @default(cuid())
-  occurredAt        DateTime  @default(now())
-  category          String    @default("OTHER") // INJURY | ACCIDENT | CUSTOMER_DISPUTE | SECURITY | EQUIPMENT_FAILURE | OTHER
-  location          String?
-  description       String
-  actionTaken       String?
-  witnesses         String?
-  followUpRequired  Boolean   @default(false)
-  followUpNotes     String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id               String   @id @default(cuid())
+  occurredAt       DateTime @default(now())
+  category         String   @default("OTHER") // INJURY | ACCIDENT | CUSTOMER_DISPUTE | SECURITY | EQUIPMENT_FAILURE | OTHER
+  location         String?
+  description      String
+  actionTaken      String?
+  witnesses        String?
+  followUpRequired Boolean  @default(false)
+  followUpNotes    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   reportedBy   GymUser? @relation("IncidentReportedBy", fields: [reportedById], references: [id])
   reportedById String?
@@ -827,17 +827,17 @@ model GymIncident {
 // ---------------------------------------------------------------------------
 
 model GymShakeBarProduct {
-  id               String    @id @default(cuid())
-  name             String
-  category         String    @default("OTHER") // PROTEIN | PRE_WORKOUT | HYDRATION | ENERGY_DRINKS | SNACKS | OTHER
-  stock            Int       @default(0)
-  costPrice        Float?
-  sellingPrice     Float?
-  lowStockLevel    Int       @default(5)
-  supplier         String?
-  lastRestockedAt  DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  name            String
+  category        String    @default("OTHER") // PROTEIN | PRE_WORKOUT | HYDRATION | ENERGY_DRINKS | SNACKS | OTHER
+  stock           Int       @default(0)
+  costPrice       Float?
+  sellingPrice    Float?
+  lowStockLevel   Int       @default(5)
+  supplier        String?
+  lastRestockedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   transactions GymInventoryTransaction[]
 
@@ -858,6 +858,134 @@ model GymInventoryTransaction {
   createdById String?
 
   @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// Goodtill / SumUp POS mirror — powers the Shake Bar tab's live sales view.
+// Deliberately no hard FK relations across these (productExternalId,
+// categoryExternalId, sale->items use plain indexed string columns, joined
+// in application code) so a webhook or sync for a not-yet-seen product/sale
+// never fails on referential integrity — catalog and sales sync run
+// independently and must tolerate arriving out of order.
+// ---------------------------------------------------------------------------
+
+model GymPosCategory {
+  id               String   @id @default(cuid())
+  externalId       String   @unique // Goodtill category id
+  name             String
+  description      String?
+  parentExternalId String?
+  active           Boolean  @default(true)
+  raw              Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model GymPosProduct {
+  id                 String   @id @default(cuid())
+  externalId         String   @unique // Goodtill product id
+  name               String
+  sku                String?
+  categoryExternalId String?
+  sellingPrice       Float?
+  purchasePrice      Float?
+  active             Boolean  @default(true)
+  trackInventory     Boolean  @default(false)
+  inventory          Float?
+  minStock           Float?
+  alertOn            Boolean  @default(false)
+  alertBelow         Float?
+  outletExternalId   String?
+  raw                Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([categoryExternalId])
+  @@index([sku])
+}
+
+model GymPosSale {
+  id               String   @id @default(cuid())
+  externalId       String   @unique // Goodtill sale id
+  outletExternalId String?
+  outletName       String?
+  registerId       String?
+  staffId          String?
+  customerId       String?
+  orderNo          Int?
+  receiptNo        String?
+  saleType         String? // INSTORE | TABLE | WEB | ...
+  orderStatus      String? // COMPLETED | VOIDED | ...
+  saleDateTime     DateTime
+  totalIncVat      Float
+  totalExVat       Float?
+  totalVat         Float?
+  discountAmount   Float?
+  paymentMethods   String? // comma-joined keys of sales_payments, e.g. "CARD"
+  refunded         Boolean  @default(false)
+  source           String   @default("WEBHOOK") // WEBHOOK | HISTORICAL_SYNC
+  raw              Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  items GymPosSaleItem[]
+
+  @@index([saleDateTime])
+  @@index([orderStatus])
+}
+
+model GymPosSaleItem {
+  id                String  @id @default(cuid())
+  externalId        String  @unique // Goodtill sales_items[].id
+  productExternalId String?
+  productName       String
+  quantity          Float
+  unitPriceIncVat   Float?
+  lineTotalIncVat   Float?
+  vatRate           Float?
+  discountAmount    Float?
+  isRemoved         Boolean @default(false)
+  raw               Json?
+
+  sale   GymPosSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleId String
+
+  @@index([saleId])
+  @@index([productExternalId])
+}
+
+/**
+ * Idempotency log for webhook deliveries — a message_id is inserted before
+ * processing; a unique-constraint failure means "already handled", so the
+ * handler can return 200 immediately without reprocessing.
+ */
+model GymPosWebhookEvent {
+  id             String   @id @default(cuid())
+  messageId      String   @unique
+  event          String
+  saleExternalId String?
+  receivedAt     DateTime @default(now())
+  status         String   @default("OK") // OK | ERROR
+  error          String?
+}
+
+/**
+ * Singleton-per-key status row surfaced in the Shake Bar UI ("last webhook
+ * received", "last successful sync").
+ */
+model GymPosSyncState {
+  id                          String    @id @default(cuid())
+  key                         String    @unique @default("goodtill")
+  lastWebhookAt               DateTime?
+  lastWebhookEvent            String?
+  lastCatalogSyncAt           DateTime?
+  lastSalesSyncAt             DateTime?
+  lastSalesSyncStatus         String? // OK | ERROR
+  lastSalesSyncError          String?
+  historicalImportStartedAt   DateTime?
+  historicalImportCompletedAt DateTime?
+  historicalImportSalesCount  Int?
+  updatedAt                   DateTime  @updatedAt
 }
 
 // ---------------------------------------------------------------------------
@@ -972,12 +1100,12 @@ model GymAttachment {
 }
 
 model GymSettings {
-  id            String   @id @default("singleton")
-  gymName       String   @default("Muscle Massacre")
-  address       String?
-  phone         String?
-  email         String   @default("admin@musclemassacre.com")
-  website       String   @default("https://musclemassacre.com")
-  openingHours  Json?
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default("singleton")
+  gymName      String   @default("Muscle Massacre")
+  address      String?
+  phone        String?
+  email        String   @default("admin@musclemassacre.com")
+  website      String   @default("https://musclemassacre.com")
+  openingHours Json?
+  updatedAt    DateTime @updatedAt
 }

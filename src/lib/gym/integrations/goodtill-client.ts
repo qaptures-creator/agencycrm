@@ -370,6 +370,57 @@ export type GoodtillSale = {
   items: GoodtillSaleItem[];
 };
 
+export type GoodtillSaleItemDetail = {
+  id: string;
+  product_id: string | null;
+  product_name: string;
+  quantity: number | string;
+  price_inc_vat_per_item: string | number;
+  vat_rate: string | number | null;
+  has_discount?: number;
+  discount_amount?: string | number;
+  is_removed?: number;
+  order_status?: string;
+  line_total_after_discount?: string | number;
+  line_subtotal_after_discount?: string | number;
+  line_vat_after_discount?: string | number;
+  [key: string]: unknown;
+};
+
+/** Full sale detail — same shape returned by both GET /sales/:id (single
+ * sale, used from the webhook) and GET /external/get_sales_details (bulk
+ * paginated, used for historical import), so both paths share one shape. */
+export type GoodtillSaleDetail = {
+  id: string;
+  outlet_id: string;
+  register_id: string | null;
+  staff_id: string | null;
+  customer_id: string | null;
+  order_no: number | null;
+  sale_type: string | null;
+  order_status: string;
+  receipt_no: string | null;
+  sales_date_time: string;
+  sales_details: {
+    quantity: string | number;
+    total_after_discount?: string | number;
+    subtotal_after_discount?: string | number;
+    vat_after_discount?: string | number;
+    total_ex_vat?: string | number;
+    total_vat?: string | number;
+    total?: string | number;
+    line_discount?: number;
+    sales_items: GoodtillSaleItemDetail[];
+    [key: string]: unknown;
+  };
+  sales_payments?: Record<string, { payment_amount: number | string; payment_total?: number | string }>;
+  refunds?: unknown[];
+  can_refund?: boolean;
+  removed_items?: unknown[];
+  outlet?: { id: string; outlet_name: string } | null;
+  [key: string]: unknown;
+};
+
 // ---------------------------------------------------------------------------
 // Public read-only API
 // ---------------------------------------------------------------------------
@@ -405,6 +456,35 @@ export async function getGoodtillSales(params: {
       from: params.from ? formatGoodtillDateTime(params.from) : undefined,
       to: params.to ? formatGoodtillDateTime(params.to) : undefined,
       timezone: "utc",
+      include_voided: params.includeVoided ? 1 : 0,
+      outlet_ids: params.outletIds,
+    },
+  });
+}
+
+/** Full detail for a single sale — used by the webhook handler, which only
+ * receives a sale ID and must fetch the rest itself. */
+export async function getGoodtillSaleDetails(saleId: string): Promise<GoodtillSaleDetail> {
+  return goodtillFetch<GoodtillSaleDetail>(`/sales/${encodeURIComponent(saleId)}`);
+}
+
+/** One page of full sale details for historical import/reconciliation.
+ * Max 50 per page per the docs — caller must page via offset. */
+export async function getGoodtillSalesDetailsPage(params: {
+  from?: Date;
+  to?: Date;
+  limit?: number;
+  offset?: number;
+  includeVoided?: boolean;
+  outletIds?: string[];
+}): Promise<GoodtillSaleDetail[]> {
+  return goodtillFetch<GoodtillSaleDetail[]>("/external/get_sales_details", {
+    query: {
+      from: params.from ? formatGoodtillDateTime(params.from) : undefined,
+      to: params.to ? formatGoodtillDateTime(params.to) : undefined,
+      timezone: "utc",
+      limit: params.limit ?? 50,
+      offset: params.offset ?? 0,
       include_voided: params.includeVoided ? 1 : 0,
       outlet_ids: params.outletIds,
     },
