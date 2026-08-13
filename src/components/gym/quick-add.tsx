@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Plus, Target, Inbox, ListChecks, CalendarClock, StickyNote, Dumbbell, Wrench, ShieldAlert } from "lucide-react";
+import { Plus, Target, Inbox, ListChecks, CalendarClock, StickyNote, Dumbbell, Wrench, SprayCan, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,6 +20,7 @@ const ITEMS = [
   { label: "New Member Note", href: "/gym/members?new=note", icon: StickyNote },
   { label: "Report Equipment Issue", href: "/gym/equipment?new=1", icon: Dumbbell },
   { label: "Maintenance Ticket", href: "/gym/maintenance?new=1", icon: Wrench },
+  { label: "Cleaning Task", href: "/gym/cleaning?new=1", icon: SprayCan },
   { label: "Incident Report", href: "/gym/incidents?new=1", icon: ShieldAlert },
 ];
 

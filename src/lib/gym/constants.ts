@@ -172,6 +172,18 @@ export const MAINTENANCE_STATUSES: Opt[] = [
   { value: "FIXED", label: "Fixed", color: "#22c55e" },
 ];
 
+// Cleaning zones/areas are a user-configurable catalog (GymCleaningZone),
+// not a fixed list here — see the "Manage Zones" dialog on /gym/cleaning.
+export const CLEANING_TASK_STATUSES: Opt[] = [
+  { value: "PENDING", label: "Pending", color: "#64748b" },
+  { value: "IN_PROGRESS", label: "In Progress", color: "#6366f1" },
+  { value: "AWAITING_REVIEW", label: "Awaiting Review", color: "#f59e0b" },
+  { value: "COMPLETE", label: "Complete", color: "#22c55e" },
+  { value: "MISSED", label: "Missed", color: "#ef4444" },
+];
+
+export const DEFAULT_CLEANING_ZONES = ["Free Weights", "Cardio", "Changing Rooms", "Studio", "Reception"];
+
 export const INCIDENT_CATEGORIES: Opt[] = [
   { value: "INJURY", label: "Injury" },
   { value: "ACCIDENT", label: "Accident" },

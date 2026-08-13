@@ -147,6 +147,22 @@ export const maintenanceTicketSchema = z.object({
 });
 export type MaintenanceTicketInput = z.infer<typeof maintenanceTicketSchema>;
 
+export const cleaningZoneSchema = z.object({
+  name: z.string().min(1, "Zone name is required"),
+});
+export type CleaningZoneInput = z.infer<typeof cleaningZoneSchema>;
+
+export const cleaningTaskSchema = z.object({
+  date: z.string().min(1, "Date is required"),
+  zoneId: z.string().min(1, "Zone is required"),
+  whatBeingCleaned: z.string().min(1, "Describe what's being cleaned"),
+  assignedToId: optionalString,
+  notes: optionalString,
+  photoUrl: optionalString,
+  status: z.string().default("PENDING"),
+});
+export type CleaningTaskInput = z.infer<typeof cleaningTaskSchema>;
+
 export const incidentSchema = z.object({
   occurredAt: z.string().min(1),
   category: z.string().default("OTHER"),

@@ -326,6 +326,8 @@ model GymUser {
   inventoryTxns      GymInventoryTransaction[] @relation("InventoryTxnCreatedBy")
   attachmentsUploaded GymAttachment[]         @relation("AttachmentUploadedBy")
   resetTokens        GymPasswordResetToken[]
+  cleaningTasksCreated   GymCleaningTask[]    @relation("CleaningTaskCreatedBy")
+  cleaningTasksCompleted GymCleaningTask[]    @relation("CleaningTaskCompletedBy")
 
   @@index([accessRole])
 }
@@ -383,6 +385,7 @@ model GymStaff {
   maintenanceReported GymMaintenanceTicket[] @relation("MaintenanceReportedBy")
   maintenanceAssigned GymMaintenanceTicket[] @relation("MaintenanceAssignee")
   contentOwned       GymMarketingContent[]  @relation("ContentOwner")
+  cleaningTasksAssigned GymCleaningTask[]    @relation("CleaningTaskAssignee")
 
   @@index([position])
 }
@@ -720,6 +723,53 @@ model GymEquipment {
 
   @@index([category])
   @@index([condition])
+}
+
+// ---------------------------------------------------------------------------
+// Equipment Cleaning
+// ---------------------------------------------------------------------------
+
+// Configurable catalog of cleaning zones/areas (Free Weights, Cardio, etc.) —
+// managed from the Cleaning page, not hardcoded, so gyms can rename/add/retire
+// zones without a code change. Mirrors the Agency CRM's PipelineStage pattern.
+model GymCleaningZone {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  order     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tasks GymCleaningTask[]
+
+  @@index([order])
+}
+
+model GymCleaningTask {
+  id               String    @id @default(cuid())
+  date             DateTime  @db.Date
+  whatBeingCleaned String
+  status           String    @default("PENDING") // PENDING | IN_PROGRESS | AWAITING_REVIEW | COMPLETE | MISSED
+  notes            String?
+  photoUrl         String? // optional — staff currently send proof over WhatsApp; manager can attach it here later
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  zone   GymCleaningZone @relation(fields: [zoneId], references: [id])
+  zoneId String
+
+  assignedTo   GymStaff? @relation("CleaningTaskAssignee", fields: [assignedToId], references: [id])
+  assignedToId String?
+
+  createdBy   GymUser? @relation("CleaningTaskCreatedBy", fields: [createdById], references: [id])
+  createdById String?
+
+  completedBy   GymUser? @relation("CleaningTaskCompletedBy", fields: [completedById], references: [id])
+  completedById String?
+
+  @@index([date])
+  @@index([zoneId])
+  @@index([status])
 }
 
 model GymMaintenanceTicket {

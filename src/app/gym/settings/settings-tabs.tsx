@@ -39,6 +39,7 @@ export function SettingsTabs({
         <TabsTrigger value="membership">Membership</TabsTrigger>
         <TabsTrigger value="roles">Staff Roles</TabsTrigger>
         <TabsTrigger value="tasks">Task Categories</TabsTrigger>
+        <TabsTrigger value="cleaning">Cleaning Zones</TabsTrigger>
         <TabsTrigger value="email">Email</TabsTrigger>
         <TabsTrigger value="notifications">Notifications</TabsTrigger>
         <TabsTrigger value="integrations">Integrations</TabsTrigger>
@@ -115,6 +116,22 @@ export function SettingsTabs({
               ))}
             </div>
             <p className="text-xs text-muted-foreground">Fixed for now, not yet user-customisable.</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="cleaning">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Cleaning Zones</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Add, rename, reorder, or retire the zones/areas staff clean (Free Weights, Cardio, Changing Rooms, etc.) from the Cleaning page.
+            </p>
+            <Link href="/gym/cleaning" className="mt-2 inline-block text-sm text-primary hover:underline">
+              Go to Cleaning →
+            </Link>
           </CardContent>
         </Card>
       </TabsContent>

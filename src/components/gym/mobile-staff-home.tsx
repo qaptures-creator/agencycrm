@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ListChecks, Dumbbell, Wrench, ClipboardList } from "lucide-react";
+import { ListChecks, Dumbbell, Wrench, SprayCan, ClipboardList } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getOwnAttendanceStatus } from "@/actions/gym/attendance";
 import { ClockInOutCard } from "@/components/gym/clock-in-out-card";
@@ -77,8 +77,15 @@ export async function MobileStaffHome({ userId, staffId }: { userId: string; sta
           Report Equipment
         </Link>
         <Link
+          href="/gym/cleaning"
+          className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card py-4 text-xs font-medium text-foreground/90 hover:border-primary/40"
+        >
+          <SprayCan className="size-5 text-primary" />
+          Cleaning Tasks
+        </Link>
+        <Link
           href="/gym/maintenance?new=1"
-          className="col-span-2 flex flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card py-4 text-xs font-medium text-foreground/90 hover:border-primary/40"
+          className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card py-4 text-xs font-medium text-foreground/90 hover:border-primary/40"
         >
           <Wrench className="size-5 text-primary" />
           Report Maintenance Issue

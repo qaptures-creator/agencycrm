@@ -3,6 +3,7 @@
 // projects, or financial data are ever created here.
 import { PrismaClient } from "@prisma/client";
 import { DEFAULT_PIPELINE_STAGES, DEFAULT_DELIVERABLE_STATUSES } from "../src/lib/constants";
+import { DEFAULT_CLEANING_ZONES } from "../src/lib/gym/constants";
 import { hashPassword } from "../src/lib/gym/password";
 import { seedGymDemoData } from "./seed-gym-demo";
 
@@ -53,6 +54,14 @@ async function main() {
     create: { id: "singleton" },
     update: {},
   });
+
+  const zoneCount = await prisma.gymCleaningZone.count();
+  if (zoneCount === 0) {
+    for (let i = 0; i < DEFAULT_CLEANING_ZONES.length; i++) {
+      await prisma.gymCleaningZone.create({ data: { name: DEFAULT_CLEANING_ZONES[i], order: i } });
+    }
+    console.log(`Seeded ${DEFAULT_CLEANING_ZONES.length} cleaning zones.`);
+  }
 
   for (const provider of ["EMAIL", "ASHBOURNE", "WEBSITE", "GOOGLE_CALENDAR", "META"]) {
     await prisma.gymIntegration.upsert({

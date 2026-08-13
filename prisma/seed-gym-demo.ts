@@ -290,6 +290,42 @@ export async function seedGymDemoData(prisma: PrismaClient) {
     data: { issue: "Changing room light flickering", area: "Changing Rooms", priority: "LOW", reportedById: cleaner.id, status: "FIXED", resolvedAt: daysFromNow(-2) },
   });
 
+  // --- Equipment Cleaning --------------------------------------------------
+  // Zones are seeded structurally in seed.ts (always runs first); look them
+  // up here rather than re-creating, so this stays a no-op if run twice.
+  const cleaningZones = await prisma.gymCleaningZone.findMany({ orderBy: { order: "asc" } });
+  const zoneByName = (name: string) => cleaningZones.find((z) => z.name === name) ?? cleaningZones[0];
+  const today = daysFromNow(0);
+  const yesterday = daysFromNow(-1);
+
+  const cleaningTaskDefs = [
+    { date: today, zone: "Free Weights", what: "Dumbbells, benches, mats wiped down", status: "COMPLETE", assignedTo: cleaner, completedBy: manager, notes: "Photos received on WhatsApp at 09:10" },
+    { date: today, zone: "Cardio", what: "Treadmills, bikes, cross-trainers sanitised", status: "AWAITING_REVIEW", assignedTo: cleaner, notes: "Photos received on WhatsApp at 10:35" },
+    { date: today, zone: "Changing Rooms", what: "Lockers, benches, mirrors, floors", status: "IN_PROGRESS", assignedTo: floor },
+    { date: today, zone: "Studio", what: "Mats, mirrors, sound equipment wiped", status: "PENDING", assignedTo: cleaner },
+    { date: today, zone: "Reception", what: "Front desk, seating area, entrance glass", status: "PENDING", assignedTo: reception },
+    { date: yesterday, zone: "Free Weights", what: "Dumbbells, benches, mats wiped down", status: "COMPLETE", assignedTo: cleaner, completedBy: manager },
+    { date: yesterday, zone: "Cardio", what: "Treadmills, bikes, cross-trainers sanitised", status: "MISSED", assignedTo: cleaner, notes: "No photos received — follow up with staff" },
+    { date: yesterday, zone: "Changing Rooms", what: "Lockers, benches, mirrors, floors", status: "COMPLETE", assignedTo: floor, completedBy: manager },
+    { date: yesterday, zone: "Studio", what: "Mats, mirrors, sound equipment wiped", status: "COMPLETE", assignedTo: cleaner, completedBy: manager },
+    { date: yesterday, zone: "Reception", what: "Front desk, seating area, entrance glass", status: "MISSED", assignedTo: reception },
+  ];
+  for (const t of cleaningTaskDefs) {
+    await prisma.gymCleaningTask.create({
+      data: {
+        date: t.date,
+        zoneId: zoneByName(t.zone).id,
+        whatBeingCleaned: t.what,
+        status: t.status,
+        assignedToId: t.assignedTo.id,
+        notes: t.notes,
+        completedById: t.completedBy?.userId ?? undefined,
+        completedAt: t.status === "COMPLETE" ? t.date : undefined,
+        createdById: manager.userId ?? undefined,
+      },
+    });
+  }
+
   // --- Shake Bar ---------------------------------------------------------------
   const shakeBarDefs = [
     { name: "Whey Protein Shake - Chocolate", category: "PROTEIN", stock: 42, costPrice: 1.8, sellingPrice: 4.5, lowStockLevel: 10 },
