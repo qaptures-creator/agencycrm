@@ -25,7 +25,7 @@ export async function GymTopbar({ user }: { user: { id: string; name: string; ac
   return (
     <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur sm:px-6">
       <MobileMenuButton user={user} />
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <GymGlobalSearch />
       </div>
       <ThemeToggle />
