@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronsLeft, ChevronsRight, LogOut, X } from "lucide-react";
@@ -150,22 +151,58 @@ export function GymMobileSidebar({
   onClose: () => void;
   user: CurrentUser;
 }) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex lg:hidden">
-      <div className="fixed inset-0 bg-black/60" onClick={onClose} />
-      <aside className="relative flex w-72 flex-col bg-sidebar border-r border-sidebar-border">
-        <div className="flex items-center justify-between">
+  // Lock background scroll while the drawer is open, and let Escape close it.
+  React.useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, onClose]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  // Rendered via portal directly into <body>: the topbar uses backdrop-blur,
+  // and any ancestor with a filter/backdrop-filter/transform establishes a
+  // new containing block for `position: fixed` descendants — which silently
+  // confined this drawer's "fixed inset-0" to the header's own box (~64px
+  // tall) instead of the viewport. Portaling out from under that ancestor is
+  // the actual fix; each layer below is independently `fixed` to the real
+  // viewport rather than relying on a flex-stretch parent.
+  return createPortal(
+    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+      <div className="fixed inset-0 bg-black/60" onClick={onClose} aria-hidden="true" />
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-10 flex h-dvh w-[85vw] max-w-[320px] flex-col",
+          "border-r border-sidebar-border bg-sidebar",
+          "pt-[env(safe-area-inset-top)]"
+        )}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-sidebar-border pr-2">
           <Brand />
-          <button onClick={onClose} className="mr-4 rounded-md p-1 text-sidebar-foreground/60 hover:bg-sidebar-accent">
+          <button
+            onClick={onClose}
+            aria-label="Close menu"
+            className="rounded-md p-2 text-sidebar-foreground/60 hover:bg-sidebar-accent"
+          >
             <X className="size-4" />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-thin py-2">
           <NavLinks role={user.accessRole as GymAccessRole} onNavigate={onClose} />
         </div>
-        <UserFooter user={user} />
+        <div className="pb-[env(safe-area-inset-bottom)]">
+          <UserFooter user={user} />
+        </div>
       </aside>
-    </div>
+    </div>,
+    document.body
   );
 }
