@@ -52,40 +52,44 @@ export const ASSETS = {
   scene4: "assets/scene4-thank-you.png",
 };
 
-// Approximate star-row bounding boxes, expressed as a fraction of the
-// 1080x1350 canvas (x, y = top-left; w, h = size), estimated from the
-// supplied screenshots. These are ESTIMATES ONLY — run `npm run calibrate`
-// once the real source images are in /public/assets to auto-detect the
-// exact gold star-icon bounds by colour thresholding, then paste the
-// results back in here.
+// Star-row bounding boxes, expressed as a fraction of the 1080x1350
+// canvas (x, y = top-left; w, h = size). Calibrated against the real
+// supplied assets via `npm run calibrate` (scene1/scene2/scene4 — gold
+// pixel colour thresholding) plus a small padding margin for anti-aliased
+// edges. Re-run calibrate if the source images are re-exported.
 export const STAR_REGIONS = {
-  // "ANOTHER 5 STAR EXPERIENCE" — row under the headline, above CTA area.
-  scene1: { x: 0.083, y: 0.788, w: 0.29, h: 0.034 },
+  // "ANOTHER 5 STAR EXPERIENCE" — row under the headline.
+  scene1: { x: 0.05, y: 0.812, w: 0.35, h: 0.03 },
   // Small "4.5 ★★★★★" row inside the white review card, next to the rating.
-  scene2: { x: 0.255, y: 0.475, w: 0.165, h: 0.024 },
+  scene2: { x: 0.235, y: 0.508, w: 0.24, h: 0.04 },
   // "THANK YOU" stars, above the "BOOK YOUR JOURNEY TODAY" button.
-  scene4: { x: 0.083, y: 0.845, w: 0.29, h: 0.034 },
+  scene4: { x: 0.08, y: 0.838, w: 0.33, h: 0.045 },
 };
 
-// Background colour sampled near each star row, used to matte the row
-// during the pop-in so the pre-baked static stars don't "ghost" behind the
-// animated ones. Re-check with the real asset (see calibrate script).
-// Scene 2 — the white review-card panel (rating, quote, name) as it sits
-// over the darkened photo.
-export const REVIEW_CARD_REGION = { x: 0.0, y: 0.585, w: 1.0, h: 0.33 };
-
+// Background colour sampled directly from the real assets near each star
+// row (a few px outside the star glyphs), used to matte the row during
+// the pop-in so the pre-baked static stars don't "ghost" behind the
+// animated ones.
 export const STAR_MATTE_COLOR = {
-  scene1: "#171716",
-  scene2: "#ffffff",
-  scene4: "#171716",
+  scene1: "#403c33", // dark asphalt, slight warm/olive cast
+  scene2: "#fefefe", // white review card
+  scene4: "#1c1b18", // near-black asphalt
 };
+
+// Scene 2 — the white review-card panel (rating, quote, name) as it sits
+// over the darkened photo. Calibrated by detecting the actual white-card
+// bounding box in the real asset.
+export const REVIEW_CARD_REGION = { x: 0.105, y: 0.393, w: 0.79, h: 0.49 };
 
 // Scene 3 — the three benefit icon+label cells ("Comfortable seating",
 // "Air conditioned vehicles", "USB charging points"), as one combined row.
-export const ICON_ROW_REGION = { x: 0.05, y: 0.535, w: 0.9, h: 0.045 };
-export const ICON_ROW_MATTE = "#0c0c0c";
+// Calibrated by bounding the gold icon glyphs + white label text.
+export const ICON_ROW_REGION = { x: 0.045, y: 0.538, w: 0.945, h: 0.07 };
+export const ICON_ROW_MATTE = "#1a1712";
 
-// Scene 4 — "THANK YOU" headline and the CTA button block.
-export const THANK_YOU_TEXT_REGION = { x: 0.08, y: 0.695, w: 0.62, h: 0.07 };
-export const CTA_REGION = { x: 0.08, y: 0.87, w: 0.56, h: 0.06 };
-export const SCENE4_MATTE = "#141412";
+// Scene 4 — "THANK YOU" headline and the CTA button block. Calibrated by
+// bounding the white headline glyphs / the gold CTA border rectangle.
+export const THANK_YOU_TEXT_REGION = { x: 0.085, y: 0.698, w: 0.56, h: 0.095 };
+export const CTA_REGION = { x: 0.085, y: 0.865, w: 0.51, h: 0.105 };
+export const SCENE4_TEXT_MATTE = "#242119";
+export const SCENE4_CTA_MATTE = "#121110";

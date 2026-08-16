@@ -36,13 +36,13 @@ export const SceneTwo: React.FC = () => {
         src={ASSETS.scene2}
         region={REVIEW_CARD_REGION}
         matteColor="#ffffff"
-        startFrame={0}
+        startFrame={start}
         count={1}
         popDurationFrames={16}
         scaleFrom={0.96}
         extraTransform={(p) => `translateY(${interpolate(p, [0, 1], [20, 0])}px)`}
       />
-      <StarShimmer region={STAR_REGIONS.scene2} startFrame={22} durationFrames={14} />
+      <StarShimmer region={STAR_REGIONS.scene2} startFrame={start + 22} durationFrames={14} />
     </div>
   );
 };

@@ -39,7 +39,7 @@ export const SceneOne: React.FC = () => {
           src={ASSETS.scene1}
           region={STAR_REGIONS.scene1}
           matteColor={STAR_MATTE_COLOR.scene1}
-          startFrame={8}
+          startFrame={start + 8}
           popDurationFrames={6}
           staggerFrames={3}
         />

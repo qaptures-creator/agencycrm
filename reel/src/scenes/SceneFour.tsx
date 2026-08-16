@@ -6,7 +6,8 @@ import {
   FINAL_FADE_END,
   FINAL_FADE_START,
   HEIGHT,
-  SCENE4_MATTE,
+  SCENE4_CTA_MATTE,
+  SCENE4_TEXT_MATTE,
   SCENE_BOUNDS,
   STAR_MATTE_COLOR,
   STAR_REGIONS,
@@ -51,7 +52,7 @@ export const SceneFour: React.FC = () => {
           src={ASSETS.scene4}
           region={STAR_REGIONS.scene4}
           matteColor={STAR_MATTE_COLOR.scene4}
-          startFrame={14}
+          startFrame={start + 14}
           popDurationFrames={7}
           staggerFrames={3}
           glow
@@ -59,8 +60,8 @@ export const SceneFour: React.FC = () => {
         <CellPop
           src={ASSETS.scene4}
           region={THANK_YOU_TEXT_REGION}
-          matteColor={SCENE4_MATTE}
-          startFrame={4}
+          matteColor={SCENE4_TEXT_MATTE}
+          startFrame={start + 4}
           count={1}
           popDurationFrames={12}
           scaleFrom={0.98}
@@ -68,8 +69,8 @@ export const SceneFour: React.FC = () => {
         <CellPop
           src={ASSETS.scene4}
           region={CTA_REGION}
-          matteColor={SCENE4_MATTE}
-          startFrame={6}
+          matteColor={SCENE4_CTA_MATTE}
+          startFrame={start + 6}
           count={1}
           popDurationFrames={12}
           scaleFrom={0.97}

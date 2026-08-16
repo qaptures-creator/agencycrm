@@ -37,7 +37,7 @@ export const SceneThree: React.FC = () => {
           src={ASSETS.scene3}
           region={ICON_ROW_REGION}
           matteColor={ICON_ROW_MATTE}
-          startFrame={10}
+          startFrame={start + 10}
           count={3}
           popDurationFrames={9}
           staggerFrames={6}
