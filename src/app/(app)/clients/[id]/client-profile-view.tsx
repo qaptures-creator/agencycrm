@@ -26,6 +26,7 @@ import { DeliverablesTab } from "./deliverables-tab";
 import { RetainerTab } from "./retainer-tab";
 import { InvoicesTab } from "./invoices-tab";
 import { DocumentsTab } from "./documents-tab";
+import { ProposalsTab } from "./proposals-tab";
 import { ActivityLog } from "@/components/activity-log";
 import { CLIENT_STATUSES } from "@/lib/constants";
 import { deleteClient } from "@/actions/clients";
@@ -43,6 +44,7 @@ import type {
   Activity,
   Retainer,
   Document,
+  Proposal,
 } from "@prisma/client";
 
 type FullClient = Client & {
@@ -54,6 +56,7 @@ type FullClient = Client & {
   activities: (Activity & { createdBy: User | null })[];
   retainer: Retainer | null;
   documents: Document[];
+  proposals: Proposal[];
 };
 
 export function ClientProfileView({
@@ -142,6 +145,7 @@ export function ClientProfileView({
           <TabsTrigger value="retainer">Retainer</TabsTrigger>
           <TabsTrigger value="invoices">Invoices ({client.invoices.length})</TabsTrigger>
           <TabsTrigger value="documents">Documents ({client.documents.length})</TabsTrigger>
+          <TabsTrigger value="proposals">Proposals ({client.proposals.length})</TabsTrigger>
           <TabsTrigger value="activity">Activity ({client.activities.length})</TabsTrigger>
         </TabsList>
 
@@ -173,6 +177,9 @@ export function ClientProfileView({
             microsoftConnected={microsoftConnected}
             autoOpenUpload={autoOpenUpload}
           />
+        </TabsContent>
+        <TabsContent value="proposals">
+          <ProposalsTab client={client} proposals={client.proposals} />
         </TabsContent>
         <TabsContent value="activity">
           <ActivityLog

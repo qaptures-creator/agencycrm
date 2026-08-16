@@ -1,0 +1,94 @@
+/* Proposal document — deliberately isolated from the app's own theme tokens
+   (globals.css) so a proposal always renders the same branded look
+   regardless of the viewer's light/dark preference, both on screen and when
+   Puppeteer prints it. */
+
+.proposal-root {
+  color-scheme: light;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+.proposal-page {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  color: #0f172a;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+/* On-screen preview: centred stack of "paper" pages. */
+.proposal-root--view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  padding: 2rem 1rem 4rem;
+  background: #eef0f4;
+}
+.proposal-root--view .proposal-page {
+  width: 100%;
+  border-radius: 16px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.08),
+    0 16px 40px rgba(15, 23, 42, 0.12);
+}
+.proposal-root--view[data-layout="DOCUMENT"] .proposal-page {
+  max-width: 210mm;
+  aspect-ratio: 210 / 297;
+}
+.proposal-root--view[data-layout="DECK"] .proposal-page {
+  max-width: 297mm;
+  aspect-ratio: 297 / 210;
+}
+
+/* Print: exact physical page boxes, edge-to-edge, one section per PDF page. */
+.proposal-root--print {
+  margin: 0;
+}
+.proposal-root--print .proposal-page {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.proposal-root--print .proposal-page:not(:last-child) {
+  break-after: page;
+  page-break-after: always;
+}
+.proposal-root--print[data-layout="DOCUMENT"] .proposal-page {
+  width: 210mm;
+  height: 297mm;
+}
+.proposal-root--print[data-layout="DECK"] .proposal-page {
+  width: 297mm;
+  height: 210mm;
+}
+
+@media print {
+  .proposal-root {
+    color-scheme: light;
+  }
+  .proposal-page {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+
+/* Brand accent helpers, driven by the --brand custom property (set inline
+   per-proposal from the client's colour) rather than Tailwind's static
+   palette, since the colour is only known at render time. */
+.proposal-gradient {
+  background: linear-gradient(135deg, var(--brand), color-mix(in oklab, var(--brand) 55%, #0f172a));
+}
+.proposal-chip {
+  background: color-mix(in oklab, var(--brand) 12%, white);
+  color: color-mix(in oklab, var(--brand) 65%, #0f172a);
+}
+.proposal-accent-text {
+  color: var(--brand);
+}
+.proposal-accent-border {
+  border-color: color-mix(in oklab, var(--brand) 35%, white);
+}
+.proposal-dot {
+  background: var(--brand);
+}

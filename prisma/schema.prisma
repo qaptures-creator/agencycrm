@@ -144,6 +144,7 @@ model Client {
   activities   Activity[]
   retainer     Retainer?
   documents    Document[]
+  proposals    Proposal[]
 }
 
 // ---------------------------------------------------------------------------
@@ -313,6 +314,24 @@ model Document {
   mimeType    String?
   size        Int?
   uploadedAt  DateTime @default(now())
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  @@index([clientId])
+}
+
+// ---------------------------------------------------------------------------
+// Proposals (in-app HTML proposals, exportable to PDF)
+// ---------------------------------------------------------------------------
+
+model Proposal {
+  id        String   @id @default(cuid())
+  title     String
+  layout    String   @default("DOCUMENT") // DOCUMENT (A4 portrait) | DECK (A4 landscape)
+  content   Json // ProposalContent — see src/lib/proposal-types.ts
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   clientId String

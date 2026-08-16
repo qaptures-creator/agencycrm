@@ -27,6 +27,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
         activities: { orderBy: { createdAt: "desc" }, include: { createdBy: true } },
         retainer: true,
         documents: { orderBy: { uploadedAt: "desc" } },
+        proposals: { orderBy: { updatedAt: "desc" } },
       },
     }),
     prisma.user.findMany({ orderBy: { name: "asc" } }),
