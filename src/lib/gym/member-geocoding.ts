@@ -203,7 +203,10 @@ export async function geocodeMembersBatch(options?: { memberIds?: string[]; forc
     ? { id: { in: options.memberIds } }
     : options?.force
       ? {}
-      : { geocodeStatus: { not: "OK" } };
+      // `{ not: "OK" }` alone excludes NULL rows under SQL's three-valued
+      // logic (NULL != 'OK' isn't TRUE) — every never-attempted member has
+      // a NULL geocodeStatus, so this must be spelled out explicitly.
+      : { OR: [{ geocodeStatus: null }, { geocodeStatus: { not: "OK" } }] };
 
   const candidates = await prisma.gymMember.findMany({ where, select: { id: true } });
 
