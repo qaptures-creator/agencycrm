@@ -259,6 +259,79 @@ export async function getOperationsReport(range: ResolvedRange) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Trends (last 12 months — signups & revenue over time, independent of the
+// selected report range so seasonality is visible regardless of filter)
+// ---------------------------------------------------------------------------
+
+function lastNMonths(n: number, ref = new Date()) {
+  const months: { key: string; label: string; year: number; month: number }[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(ref.getFullYear(), ref.getMonth() - i, 1);
+    months.push({
+      key: `${d.getFullYear()}-${d.getMonth()}`,
+      label: d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
+      year: d.getFullYear(),
+      month: d.getMonth(),
+    });
+  }
+  return months;
+}
+
+export async function getSignupsTrend(monthsBack = 12) {
+  const months = lastNMonths(monthsBack);
+  const since = new Date(months[0].year, months[0].month, 1);
+
+  const members = await prisma.gymMember.findMany({
+    where: { joinDate: { gte: since } },
+    select: { joinDate: true },
+  });
+
+  return months.map(({ key, label, year, month }) => ({
+    month: label,
+    key,
+    signups: members.filter((m) => m.joinDate.getFullYear() === year && m.joinDate.getMonth() === month).length,
+  }));
+}
+
+export async function getRevenueTrend(monthsBack = 12) {
+  const months = lastNMonths(monthsBack);
+  const since = new Date(months[0].year, months[0].month, 1);
+
+  const payments = await prisma.gymPayment.findMany({
+    where: { status: "PAID", date: { gte: since } },
+    select: { date: true, amount: true },
+  });
+
+  return months.map(({ key, label, year, month }) => ({
+    month: label,
+    key,
+    revenue: payments
+      .filter((p) => p.date.getFullYear() === year && p.date.getMonth() === month)
+      .reduce((sum, p) => sum + p.amount, 0),
+  }));
+}
+
+const PAYMENT_TYPE_LABELS: Record<string, string> = {
+  MEMBERSHIP: "Membership",
+  JOINING_FEE: "Joining Fee",
+  DAY_PASS: "Day Pass",
+  OTHER: "Other",
+};
+
+export async function getPaymentTypeMix(range: ResolvedRange) {
+  const rows = await prisma.gymPayment.groupBy({
+    by: ["type"],
+    where: { status: "PAID", date: { gte: range.from, lte: range.to } },
+    _sum: { amount: true },
+    _count: { _all: true },
+  });
+
+  return rows
+    .map((r) => ({ name: PAYMENT_TYPE_LABELS[r.type] ?? r.type, amount: r._sum.amount ?? 0, count: r._count._all }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
 export function moneyGBP(v: number) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(v);
 }

@@ -1,12 +1,25 @@
 "use client";
 
-import { TrendingUp, TrendingDown, Minus, Users, Wallet, Target, UsersRound, Wrench } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Users, Wallet, Target, UsersRound, Wrench, LineChart } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { CsvExportButton } from "@/components/gym/csv-export-button";
+import { ChartCard } from "@/components/charts/chart-card";
+import { BarSeriesChart } from "@/components/charts/bar-series-chart";
+import { RevenueAreaChart } from "@/components/charts/revenue-area-chart";
+import { DonutChart } from "@/components/charts/donut-chart";
 import { LEAD_SOURCES, MAINTENANCE_STATUSES, labelFor } from "@/lib/gym/constants";
-import type { getMembershipReport, getRevenueReport, getLeadsReport, getStaffReport, getOperationsReport } from "@/lib/gym/reports-data";
+import type {
+  getMembershipReport,
+  getRevenueReport,
+  getLeadsReport,
+  getStaffReport,
+  getOperationsReport,
+  getSignupsTrend,
+  getRevenueTrend,
+  getPaymentTypeMix,
+} from "@/lib/gym/reports-data";
 import { cn } from "@/lib/utils";
 
 function moneyGBP(v: number) {
@@ -44,8 +57,17 @@ function SectionHeader({ title, subtitle, exportRows, exportFilename }: { title:
 }
 
 type MembershipData = Awaited<ReturnType<typeof getMembershipReport>>;
+type SignupsTrendData = Awaited<ReturnType<typeof getSignupsTrend>>;
 
-export function MembershipSection({ data, rangeLabel }: { data: MembershipData; rangeLabel: string }) {
+export function MembershipSection({
+  data,
+  rangeLabel,
+  signupsTrend,
+}: {
+  data: MembershipData;
+  rangeLabel: string;
+  signupsTrend: SignupsTrendData;
+}) {
   return (
     <div className="space-y-3">
       <SectionHeader
@@ -71,13 +93,33 @@ export function MembershipSection({ data, rangeLabel }: { data: MembershipData; 
         <span className="text-xs text-muted-foreground">New members growth: <Trend pct={data.newMembersGrowthPct} /></span>
         <span className="text-xs text-muted-foreground">Cancellations change: <Trend pct={data.cancellationsGrowthPct} /></span>
       </div>
+      <ChartCard
+        title="Signups — Last 12 Months"
+        isEmpty={signupsTrend.every((m) => m.signups === 0)}
+        emptyIcon={LineChart}
+        emptyMessage="New member signups will build up a trend here over time."
+      >
+        <BarSeriesChart data={signupsTrend} xKey="month" bars={[{ key: "signups", name: "New Members", color: "var(--color-chart-2)" }]} />
+      </ChartCard>
     </div>
   );
 }
 
 type RevenueData = Awaited<ReturnType<typeof getRevenueReport>>;
+type RevenueTrendData = Awaited<ReturnType<typeof getRevenueTrend>>;
+type PaymentTypeMixData = Awaited<ReturnType<typeof getPaymentTypeMix>>;
 
-export function RevenueSection({ data, rangeLabel }: { data: RevenueData; rangeLabel: string }) {
+export function RevenueSection({
+  data,
+  rangeLabel,
+  revenueTrend,
+  paymentTypeMix,
+}: {
+  data: RevenueData;
+  rangeLabel: string;
+  revenueTrend: RevenueTrendData | null;
+  paymentTypeMix: PaymentTypeMixData | null;
+}) {
   return (
     <div className="space-y-3">
       <SectionHeader
@@ -102,19 +144,42 @@ export function RevenueSection({ data, rangeLabel }: { data: RevenueData; rangeL
           <div className="flex flex-wrap gap-4 rounded-lg border border-border bg-secondary/20 px-4 py-2.5">
             <span className="text-xs text-muted-foreground">Growth: <Trend pct={data.growthPct} /></span>
           </div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold">Revenue by Membership Plan</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {data.revenueByPlan.map((p) => (
-                <div key={p.name} className="flex items-center justify-between text-sm">
-                  <span>{p.name}</span>
-                  <span className="font-medium">{moneyGBP(p.amount)}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          {revenueTrend && (
+            <ChartCard
+              title="Revenue — Last 12 Months"
+              isEmpty={revenueTrend.every((m) => m.revenue === 0)}
+              emptyIcon={LineChart}
+              emptyMessage="Recorded payments will build up a revenue trend here over time."
+            >
+              <RevenueAreaChart data={revenueTrend} />
+            </ChartCard>
+          )}
+          <div className="grid gap-3 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-semibold">Revenue by Membership Plan</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {data.revenueByPlan.map((p) => (
+                  <div key={p.name} className="flex items-center justify-between text-sm">
+                    <span>{p.name}</span>
+                    <span className="font-medium">{moneyGBP(p.amount)}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+            {paymentTypeMix && (
+              <ChartCard
+                title="Revenue by Payment Type"
+                subtitle={rangeLabel}
+                isEmpty={paymentTypeMix.length === 0}
+                emptyIcon={Wallet}
+                emptyMessage="No payments recorded in this period."
+              >
+                <DonutChart data={paymentTypeMix} dataKey="amount" nameKey="name" valueFormatter={moneyGBP} />
+              </ChartCard>
+            )}
+          </div>
         </>
       )}
     </div>

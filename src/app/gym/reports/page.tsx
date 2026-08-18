@@ -7,6 +7,9 @@ import {
   getLeadsReport,
   getStaffReport,
   getOperationsReport,
+  getSignupsTrend,
+  getRevenueTrend,
+  getPaymentTypeMix,
 } from "@/lib/gym/reports-data";
 import { DateRangeFilter } from "./date-range-filter";
 import { MembershipSection, RevenueSection, LeadsSection, StaffSection, OperationsSection } from "./report-sections";
@@ -23,12 +26,15 @@ export default async function ReportsPage({
 
   const range = resolveDateRange(rangeParam, fromParam, toParam);
 
-  const [membership, revenue, leads, staff, operations] = await Promise.all([
+  const [membership, revenue, leads, staff, operations, signupsTrend, revenueTrend, paymentTypeMix] = await Promise.all([
     getMembershipReport(range),
     showFinance ? getRevenueReport(range) : Promise.resolve(null),
     getLeadsReport(range),
     getStaffReport(range),
     getOperationsReport(range),
+    getSignupsTrend(12),
+    showFinance ? getRevenueTrend(12) : Promise.resolve(null),
+    showFinance ? getPaymentTypeMix(range) : Promise.resolve(null),
   ]);
 
   return (
@@ -40,9 +46,11 @@ export default async function ReportsPage({
 
       <DateRangeFilter active={rangeParam ?? "month"} from={fromParam ?? toDateInputValue(range.from)} to={toParam ?? toDateInputValue(range.to)} />
 
-      <MembershipSection data={membership} rangeLabel={range.label} />
+      <MembershipSection data={membership} rangeLabel={range.label} signupsTrend={signupsTrend} />
 
-      {showFinance && revenue && <RevenueSection data={revenue} rangeLabel={range.label} />}
+      {showFinance && revenue && (
+        <RevenueSection data={revenue} rangeLabel={range.label} revenueTrend={revenueTrend} paymentTypeMix={paymentTypeMix} />
+      )}
 
       <LeadsSection data={leads} rangeLabel={range.label} />
 

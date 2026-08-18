@@ -15,10 +15,12 @@ export function DonutChart({
   data,
   dataKey,
   nameKey,
+  valueFormatter,
 }: {
   data: Record<string, unknown>[];
   dataKey: string;
   nameKey: string;
+  valueFormatter?: (v: number) => string;
 }) {
   return (
     <ResponsiveContainer width="100%" height={240}>
@@ -28,7 +30,7 @@ export function DonutChart({
             <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
           ))}
         </Pie>
-        <Tooltip content={<ChartTooltip />} />
+        <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
         <Legend
           layout="vertical"
           verticalAlign="middle"
