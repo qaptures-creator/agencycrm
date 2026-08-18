@@ -26,6 +26,30 @@ type SearchResponse = {
 };
 type SearchErrorResponse = { error: string; message: string };
 
+/**
+ * Snapshot of exactly what search produced the current results, frozen at
+ * the moment that search succeeds. Load More reads ONLY from this — never
+ * from the live form fields — so editing the search box after results load
+ * can't leak into a pagination request. This is also what lets a pagination
+ * request reproduce the original Google Places request exactly (same
+ * textQuery + resolved center), which Places API (New) requires.
+ */
+type ActiveSearch = {
+  query: string;
+  location: string;
+  radiusMiles: number;
+  category: string;
+  center: { lat: number; lng: number };
+};
+
+function mergeAppendedResults(existing: BusinessResult[], incoming: BusinessResult[]): BusinessResult[] {
+  // Existing entries win on overlap so already-fetched Instagram/CRM state
+  // from an earlier page is never clobbered by a fresh, unenriched copy of
+  // the same business appearing again in a later page.
+  const seen = new Set(existing.map((b) => b.placeId));
+  return [...existing, ...incoming.filter((b) => !seen.has(b.placeId))];
+}
+
 const ENRICH_CONCURRENCY = 3;
 
 export function BusinessFinderView({ categories }: { categories: { value: string; label: string }[] }) {
@@ -37,7 +61,7 @@ export function BusinessFinderView({ categories }: { categories: { value: string
   const [filters, setFilters] = React.useState<FilterState>(DEFAULT_FILTERS);
   const [results, setResults] = React.useState<BusinessResult[]>([]);
   const [nextPageToken, setNextPageToken] = React.useState<string | null>(null);
-  const [center, setCenter] = React.useState<{ lat: number; lng: number } | null>(null);
+  const [activeSearch, setActiveSearch] = React.useState<ActiveSearch | null>(null);
   const [formattedAddress, setFormattedAddress] = React.useState<string | null>(null);
   const [searchedRadius, setSearchedRadius] = React.useState<number | null>(null);
 
@@ -45,6 +69,7 @@ export function BusinessFinderView({ categories }: { categories: { value: string
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [hasSearched, setHasSearched] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = React.useState<string | null>(null);
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [addingIds, setAddingIds] = React.useState<Set<string>>(new Set());
@@ -103,7 +128,8 @@ export function BusinessFinderView({ categories }: { categories: { value: string
     pumpQueue();
   }
 
-  async function runSearch(opts: { append?: boolean; pageToken?: string; overrideCenter?: { lat: number; lng: number } } = {}) {
+  /** A brand-new search — always reads the live form fields. Fully resets paging state. */
+  async function performSearch() {
     if (!query.trim() && !category) {
       setErrorMessage("Enter a business type or choose a category.");
       return;
@@ -113,18 +139,20 @@ export function BusinessFinderView({ categories }: { categories: { value: string
       return;
     }
 
-    if (opts.append) setLoadingMore(true);
-    else setLoading(true);
+    setLoading(true);
     setErrorMessage(null);
+    setLoadMoreError(null);
+    // A new search discards any in-flight pagination context outright —
+    // pagination and new-search state are never allowed to mix.
+    setNextPageToken(null);
+    setActiveSearch(null);
+    setResults([]);
+    setSelectedIds(new Set());
 
-    const params = new URLSearchParams({ q: query.trim(), location: location.trim(), radius: String(radiusMiles) });
+    const trimmedQuery = query.trim();
+    const trimmedLocation = location.trim();
+    const params = new URLSearchParams({ q: trimmedQuery, location: trimmedLocation, radius: String(radiusMiles) });
     if (category) params.set("category", category);
-    if (opts.pageToken) params.set("pageToken", opts.pageToken);
-    const useCenter = opts.overrideCenter ?? center;
-    if (opts.pageToken && useCenter) {
-      params.set("lat", String(useCenter.lat));
-      params.set("lng", String(useCenter.lng));
-    }
 
     try {
       const res = await fetch(`/api/business-finder/search?${params.toString()}`);
@@ -132,35 +160,66 @@ export function BusinessFinderView({ categories }: { categories: { value: string
 
       if (!res.ok || "error" in data) {
         setErrorMessage("message" in data ? data.message : "Something went wrong running that search.");
-        if (!opts.append) setResults([]);
         return;
       }
 
-      setCenter(data.center);
       setFormattedAddress(data.formattedAddress);
       setSearchedRadius(data.radiusMiles);
       setNextPageToken(data.nextPageToken);
       setHasSearched(true);
-
-      if (opts.append) {
-        setResults((prev) => [...prev, ...data.results]);
-      } else {
-        setResults(data.results);
-        setSelectedIds(new Set());
-        addSearch({
-          query: query.trim(),
-          location: location.trim(),
-          radiusMiles,
-          category: category || null,
-          categoryLabel: categories.find((c) => c.value === category)?.label ?? null,
-        });
-      }
+      setResults(data.results);
+      setActiveSearch({ query: trimmedQuery, location: trimmedLocation, radiusMiles, category, center: data.center });
+      addSearch({
+        query: trimmedQuery,
+        location: trimmedLocation,
+        radiusMiles,
+        category: category || null,
+        categoryLabel: categories.find((c) => c.value === category)?.label ?? null,
+      });
       enqueueEnrichment(data.results);
     } catch {
       setErrorMessage("Couldn't reach the server. Check your connection and try again.");
     } finally {
-      if (opts.append) setLoadingMore(false);
-      else setLoading(false);
+      setLoading(false);
+    }
+  }
+
+  /** Load More — reads ONLY activeSearch, never the (possibly since-edited) live form fields. */
+  async function handleLoadMore() {
+    if (!activeSearch || !nextPageToken) {
+      setLoadMoreError("Unable to load more results because the original search context is missing. Please run the search again.");
+      return;
+    }
+
+    setLoadingMore(true);
+    setLoadMoreError(null);
+
+    const params = new URLSearchParams({
+      q: activeSearch.query,
+      location: activeSearch.location,
+      radius: String(activeSearch.radiusMiles),
+      lat: String(activeSearch.center.lat),
+      lng: String(activeSearch.center.lng),
+      pageToken: nextPageToken,
+    });
+    if (activeSearch.category) params.set("category", activeSearch.category);
+
+    try {
+      const res = await fetch(`/api/business-finder/search?${params.toString()}`);
+      const data = (await res.json()) as SearchResponse | SearchErrorResponse;
+
+      if (!res.ok || "error" in data) {
+        setLoadMoreError("message" in data ? data.message : "Couldn't load more results.");
+        return;
+      }
+
+      setNextPageToken(data.nextPageToken);
+      setResults((prev) => mergeAppendedResults(prev, data.results));
+      enqueueEnrichment(data.results);
+    } catch {
+      setLoadMoreError("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -169,8 +228,8 @@ export function BusinessFinderView({ categories }: { categories: { value: string
     setLocation(s.location);
     setRadiusMiles(s.radiusMiles);
     setCategory(s.category ?? "");
-    // Let state settle before firing — runSearch reads the state vars directly.
-    setTimeout(() => runSearch(), 0);
+    // Let state settle before firing — performSearch reads the state vars directly.
+    setTimeout(() => performSearch(), 0);
   }
 
   async function handleAddToCrm(business: BusinessResult) {
@@ -210,7 +269,7 @@ export function BusinessFinderView({ categories }: { categories: { value: string
 
       // Re-check CRM status for everything we just tried, rather than tracking id-by-id.
       setSelectedIds(new Set());
-      runSearch();
+      performSearch();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Bulk add failed");
     } finally {
@@ -263,7 +322,7 @@ export function BusinessFinderView({ categories }: { categories: { value: string
           category={category}
           onCategoryChange={setCategory}
           categories={categories}
-          onSearch={() => runSearch()}
+          onSearch={() => performSearch()}
           searching={loading}
         />
       </div>
@@ -336,10 +395,15 @@ export function BusinessFinderView({ categories }: { categories: { value: string
           )}
 
           {nextPageToken && (
-            <div className="flex justify-center pt-2">
-              <Button variant="outline" onClick={() => runSearch({ append: true, pageToken: nextPageToken ?? undefined })} disabled={loadingMore}>
-                {loadingMore ? "Loading…" : "Load More"}
+            <div className="flex flex-col items-center gap-2 pt-2">
+              <Button variant="outline" onClick={handleLoadMore} disabled={loadingMore}>
+                {loadingMore ? "Loading more..." : "Load More"}
               </Button>
+              {loadMoreError && (
+                <p className="flex items-center gap-1.5 text-xs text-destructive">
+                  <AlertTriangle className="size-3.5 shrink-0" /> {loadMoreError}
+                </p>
+              )}
             </div>
           )}
         </>

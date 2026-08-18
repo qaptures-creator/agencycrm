@@ -109,6 +109,15 @@ const FIELD_MASK = [
   "nextPageToken",
 ].join(",");
 
+/**
+ * Single request builder used for every page of a Text Search — page 1 and
+ * page 2+ must be structurally identical. Places API (New) validates that a
+ * paging request "matches the initial SearchText request", so pageToken is
+ * always ADDED to the full original body, never sent in its place; there is
+ * deliberately no separate code path that omits textQuery/locationBias when
+ * a pageToken is present (that was the bug: an empty-bodied `{ pageToken }`
+ * request, which Google rejects with "Empty text_query").
+ */
 export async function searchBusinesses(params: {
   query: string;
   center: { lat: number; lng: number };
@@ -116,21 +125,24 @@ export async function searchBusinesses(params: {
   includedType?: string;
   pageToken?: string;
 }): Promise<{ results: GooglePlaceResult[]; nextPageToken: string | null }> {
+  if (!params.query.trim()) {
+    throw new GooglePlacesApiError("Cannot search Google Places with an empty text query.", 400);
+  }
+
   const key = getApiKey();
 
-  const body: Record<string, unknown> = params.pageToken
-    ? { pageToken: params.pageToken }
-    : {
-        textQuery: params.query,
-        locationBias: {
-          circle: {
-            center: { latitude: params.center.lat, longitude: params.center.lng },
-            radius: params.radiusMeters,
-          },
-        },
-        ...(params.includedType ? { includedType: params.includedType } : {}),
-        maxResultCount: 20,
-      };
+  const body: Record<string, unknown> = {
+    textQuery: params.query,
+    locationBias: {
+      circle: {
+        center: { latitude: params.center.lat, longitude: params.center.lng },
+        radius: params.radiusMeters,
+      },
+    },
+    ...(params.includedType ? { includedType: params.includedType } : {}),
+    maxResultCount: 20,
+    ...(params.pageToken ? { pageToken: params.pageToken } : {}),
+  };
 
   const res = await fetchWithTimeout(
     PLACES_SEARCH_TEXT_URL,
