@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Users,
   Inbox,
+  Mail,
   UserCog,
   CalendarClock,
   ListChecks,
@@ -33,6 +34,7 @@ export type GymNavItem = {
 export const GYM_NAV_ITEMS: GymNavItem[] = [
   { label: "Dashboard", href: "/gym", icon: LayoutDashboard },
   { label: "Members", href: "/gym/members", icon: Users, roles: ["OWNER", "MANAGER", "STAFF"] },
+  { label: "Email", href: "/gym/email", icon: Mail, roles: ["OWNER", "MANAGER", "STAFF"] },
   { label: "Enquiries", href: "/gym/enquiries", icon: Inbox },
   { label: "Staff", href: "/gym/staff", icon: UserCog, roles: ["OWNER", "MANAGER"] },
   { label: "Rota", href: "/gym/rota", icon: CalendarClock },

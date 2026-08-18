@@ -511,8 +511,9 @@ model GymMember {
   memberships GymMembership[]
   memberNotes GymMemberNote[]
   payments    GymPayment[]
-  leadsWon    GymLead[]       @relation("LeadConvertedMember")
-  enquiries   GymEnquiry[]    @relation("EnquiryConvertedMember")
+  leadsWon    GymLead[]         @relation("LeadConvertedMember")
+  enquiries   GymEnquiry[]      @relation("EnquiryConvertedMember")
+  emails      GymEmailMessage[]
 
   @@index([email])
   @@index([phone])
@@ -1139,4 +1140,67 @@ model GymGeocodeSyncState {
   geocodedCount   Int?
   failedCount     Int?
   updatedAt       DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Email Centre — the IMAP mailbox stays the source of truth for content;
+// only lightweight metadata is persisted here for fast filtering/listing.
+// Full bodies are fetched live from IMAP when a message is opened.
+// ---------------------------------------------------------------------------
+
+model GymEmailMessage {
+  id         String @id @default(cuid())
+  folderRole String // inbox | sent | drafts | spam | trash — the CRM's well-known role
+  imapPath   String // the real IMAP mailbox path, e.g. "INBOX", "Sent"
+  imapUid    Int
+
+  messageId String? // RFC Message-ID header — used for threading/dedup
+  inReplyTo String? // RFC In-Reply-To header
+
+  fromAddress String?
+  fromName    String?
+  toAddresses Json? // [{ name, address }]
+  ccAddresses Json?
+
+  subject    String?
+  receivedAt DateTime?
+
+  isRead         Boolean @default(false)
+  isFlagged      Boolean @default(false)
+  hasAttachments Boolean @default(false)
+  sizeBytes      Int?
+
+  // Virtual CRM classification — set in a later phase, never moves the
+  // message between real IMAP folders.
+  classification String? // CANCELLATION | JOB_APPLICATION | MEMBERSHIP_ENQUIRY | COMPLAINT | GENERAL
+
+  matchedMember   GymMember? @relation(fields: [matchedMemberId], references: [id], onDelete: SetNull)
+  matchedMemberId String?
+
+  lastSyncedAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([imapPath, imapUid])
+  @@index([folderRole])
+  @@index([receivedAt])
+  @@index([isRead])
+  @@index([messageId])
+  @@index([fromAddress])
+  @@index([classification])
+  @@index([matchedMemberId])
+}
+
+/**
+ * Singleton — per-folder IMAP sync checkpoints (UIDVALIDITY/last UID seen/
+ * how far back we've paged) so incremental sync never re-downloads or
+ * duplicates messages.
+ */
+model GymEmailSyncState {
+  id            String    @id @default("singleton")
+  lastRunAt     DateTime?
+  lastRunStatus String? // OK | ERROR | RUNNING
+  lastRunError  String?
+  folderState   Json? // { [role]: { uidValidity, lastUid, oldestSyncedSeq } }
+  updatedAt     DateTime  @updatedAt
 }
