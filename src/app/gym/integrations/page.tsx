@@ -1,11 +1,14 @@
 import { Mail, Landmark, Globe, Calendar, Share2, Webhook, type LucideIcon } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/gym/auth";
+import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { INTEGRATION_LABELS } from "@/lib/gym/constants";
 import { formatDateTime } from "@/lib/utils";
+import { getEmailDiagnosticEnvSummary } from "@/lib/email/config";
 import { WebsiteToggle } from "./website-toggle";
+import { EmailDiagnosticPanel } from "./email-diagnostic-panel";
 
 const ICONS: Record<string, LucideIcon> = {
   EMAIL: Mail,
@@ -17,7 +20,7 @@ const ICONS: Record<string, LucideIcon> = {
 
 const DESCRIPTIONS: Record<string, string> = {
   EMAIL:
-    "Pulls admin@musclemassacre.com into the Enquiries inbox and sends replies from the same address. Connect Microsoft 365, Google Workspace, or IMAP credentials via environment variables — contact your developer.",
+    "The 123 Reg mailbox behind the Email Centre — read/send access over IMAP/SMTP, configured entirely via Railway environment variables. Credentials never reach the browser.",
   ASHBOURNE:
     "Syncs membership and finance data (members, memberships, payments) from Ashbourne Management. The adapter architecture already exists in code at src/lib/gym/integrations/ashbourne-provider.ts, ready for real credentials once available.",
   WEBSITE:
@@ -27,7 +30,9 @@ const DESCRIPTIONS: Record<string, string> = {
 };
 
 export default async function IntegrationsPage() {
-  await requirePermission("manageIntegrations");
+  const user = await requirePermission("manageIntegrations");
+  const canManageEmail = can(user.accessRole as GymAccessRole, "manageEmail");
+  const emailEnvSummary = getEmailDiagnosticEnvSummary();
 
   const integrations = await prisma.gymIntegration.findMany({ orderBy: { provider: "asc" } });
   const order = ["EMAIL", "ASHBOURNE", "WEBSITE", "GOOGLE_CALENDAR", "META"];
@@ -46,7 +51,6 @@ export default async function IntegrationsPage() {
         {sorted.map((integration) => {
           const Icon = ICONS[integration.provider] ?? Webhook;
           const connected = integration.status === "CONNECTED";
-          const isEmailOrAshbourne = integration.provider === "EMAIL" || integration.provider === "ASHBOURNE";
 
           return (
             <Card key={integration.id}>
@@ -69,11 +73,15 @@ export default async function IntegrationsPage() {
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">{DESCRIPTIONS[integration.provider] ?? "No description available."}</p>
 
-                {isEmailOrAshbourne && !connected && (
+                {integration.provider === "ASHBOURNE" && !connected && (
                   <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
                     Not connected — no provider is implemented yet, so this can&apos;t be marked connected from the UI. This
                     will only change once real credentials are wired up in code.
                   </div>
+                )}
+
+                {integration.provider === "EMAIL" && (
+                  <EmailDiagnosticPanel canManage={canManageEmail} envSummary={emailEnvSummary} />
                 )}
 
                 {integration.provider === "WEBSITE" && <WebsiteToggle connected={connected} />}

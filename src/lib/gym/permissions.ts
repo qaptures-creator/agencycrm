@@ -19,7 +19,9 @@ type PermissionKey =
   | "manageMemberships"
   | "manageTasks"
   | "viewMarketing"
-  | "manageMarketing";
+  | "manageMarketing"
+  | "viewEmail"
+  | "manageEmail";
 
 const MATRIX: Record<GymAccessRole, Record<PermissionKey, boolean>> = {
   OWNER: {
@@ -35,6 +37,8 @@ const MATRIX: Record<GymAccessRole, Record<PermissionKey, boolean>> = {
     manageTasks: true,
     viewMarketing: true,
     manageMarketing: true,
+    viewEmail: true,
+    manageEmail: true,
   },
   MANAGER: {
     viewFinance: true,
@@ -49,6 +53,8 @@ const MATRIX: Record<GymAccessRole, Record<PermissionKey, boolean>> = {
     manageTasks: true,
     viewMarketing: true,
     manageMarketing: true,
+    viewEmail: true,
+    manageEmail: false,
   },
   STAFF: {
     viewFinance: false,
@@ -63,6 +69,8 @@ const MATRIX: Record<GymAccessRole, Record<PermissionKey, boolean>> = {
     manageTasks: false,
     viewMarketing: false,
     manageMarketing: false,
+    viewEmail: true,
+    manageEmail: false,
   },
   MARKETING: {
     viewFinance: false,
@@ -77,6 +85,8 @@ const MATRIX: Record<GymAccessRole, Record<PermissionKey, boolean>> = {
     manageTasks: false,
     viewMarketing: true,
     manageMarketing: true,
+    viewEmail: false,
+    manageEmail: false,
   },
 };
 
