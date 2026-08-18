@@ -16,6 +16,10 @@ export function getSmtpTransport(): Transporter {
     port: cfg.smtpPort,
     secure: cfg.smtpSecure,
     auth: { user: cfg.username, pass: cfg.password },
+    // Default is 2 minutes — too long for a request that must return an
+    // HTTP response. Fail fast and clearly instead.
+    connectionTimeout: 15_000,
+    greetingTimeout: 10_000,
   });
 }
 

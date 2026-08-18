@@ -29,6 +29,10 @@ function buildOptions(cfg: EmailConfig): ImapFlowOptions {
     auth: { user: cfg.username, pass: cfg.password },
     logger: false,
     disableAutoIdle: true,
+    // Defaults (90s connect / 16s greeting) are far too long for a request
+    // that has to return an HTTP response — fail fast and clearly instead.
+    connectionTimeout: 15_000,
+    greetingTimeout: 10_000,
   };
 }
 
