@@ -497,6 +497,17 @@ model GymMember {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  // --- Member Map geocoding (privacy note: latitude/longitude are the
+  // postcode centroid plus a small deterministic per-member jitter — never
+  // an exact residential coordinate) ---
+  postcode      String? // normalized UK postcode extracted from `address`, e.g. "SL6 7AB"
+  placeName     String? // town/locality from the geocoder, e.g. "Maidenhead"
+  latitude      Float?
+  longitude     Float?
+  distanceMiles Float? // cached great-circle distance from the gym's location
+  geocodeStatus String? // OK | FAILED | NO_POSTCODE — null means never attempted
+  geocodedAt    DateTime?
+
   memberships GymMembership[]
   memberNotes GymMemberNote[]
   payments    GymPayment[]
@@ -505,6 +516,8 @@ model GymMember {
 
   @@index([email])
   @@index([phone])
+  @@index([geocodeStatus])
+  @@index([placeName])
 }
 
 model GymMemberNote {
@@ -1107,5 +1120,23 @@ model GymSettings {
   email        String   @default("admin@musclemassacre.com")
   website      String   @default("https://musclemassacre.com")
   openingHours Json?
+  latitude     Float? // geocoded from `address` — origin point for member distance calcs
+  longitude    Float?
   updatedAt    DateTime @updatedAt
+}
+
+/**
+ * Singleton progress/status row for the member geocoding backfill, shown
+ * on the Member Map so staff can see it actually ran rather than silently
+ * doing nothing.
+ */
+model GymGeocodeSyncState {
+  id              String    @id @default("singleton")
+  lastRunAt       DateTime?
+  lastRunStatus   String? // OK | ERROR | RUNNING
+  lastRunError    String?
+  totalCandidates Int?
+  geocodedCount   Int?
+  failedCount     Int?
+  updatedAt       DateTime  @updatedAt
 }

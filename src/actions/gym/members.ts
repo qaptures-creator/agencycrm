@@ -6,6 +6,21 @@ import { memberSchema, type MemberInput, membershipSchema, type MembershipInput 
 import { requireGymUser, assertPermission } from "@/lib/gym/auth";
 import { logAudit } from "@/lib/gym/audit";
 import { notifyManagement } from "@/lib/gym/notify";
+import { geocodeMember } from "@/lib/gym/member-geocoding";
+
+/** Best-effort: geocoding must never fail a member save. A few seconds of
+ * extra latency on this low-frequency, deliberate staff action is an
+ * acceptable trade for the map staying in sync without a separate sync
+ * step — see src/lib/gym/member-geocoding.ts for the full pipeline. */
+async function geocodeMemberBestEffort(memberId: string) {
+  try {
+    await geocodeMember(memberId);
+  } catch {
+    // Swallowed deliberately — geocodeMember already records geocodeStatus
+    // on the member row for anything geocode-able; this only guards
+    // against something (e.g. a DB hiccup) throwing before that happens.
+  }
+}
 
 export async function createMemberAction(input: MemberInput) {
   const user = await requireGymUser();
@@ -19,6 +34,8 @@ export async function createMemberAction(input: MemberInput) {
     },
   });
 
+  if (member.address) await geocodeMemberBestEffort(member.id);
+
   await logAudit({ userId: user.id, action: "MEMBER_CREATED", entityType: "GymMember", entityId: member.id });
   revalidatePath("/gym/members");
   revalidatePath("/gym");
@@ -29,7 +46,10 @@ export async function updateMemberAction(id: string, input: MemberInput) {
   const user = await requireGymUser();
   const data = memberSchema.parse(input);
 
+  const existing = await prisma.gymMember.findUniqueOrThrow({ where: { id }, select: { address: true } });
   const member = await prisma.gymMember.update({ where: { id }, data });
+
+  if (member.address && member.address !== existing.address) await geocodeMemberBestEffort(member.id);
 
   await logAudit({ userId: user.id, action: "MEMBER_UPDATED", entityType: "GymMember", entityId: id });
   revalidatePath("/gym/members");
