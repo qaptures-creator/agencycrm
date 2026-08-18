@@ -9,6 +9,7 @@ import {
   Wallet,
   BarChart3,
   Settings,
+  MapPin,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "CRM", href: "/crm", icon: KanbanSquare },
+  { label: "Business Finder", href: "/business-finder", icon: MapPin },
   { label: "Clients", href: "/clients", icon: Building2 },
   { label: "Projects", href: "/projects", icon: Clapperboard },
   { label: "Calendar", href: "/calendar", icon: CalendarDays },

@@ -88,6 +88,7 @@ model Lead {
   source          String?
   estimatedValue  Float?
   notes           String?
+  googlePlaceId   String?   @unique
   lastContactedAt DateTime?
   nextFollowUpAt  DateTime?
   order           Int       @default(0)
