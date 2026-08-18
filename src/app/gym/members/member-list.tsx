@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Users, Search } from "lucide-react";
+import { Plus, Users, Search, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EntityDialog } from "@/components/entity-dialog";
@@ -42,15 +42,94 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number];
 
+type SortKey = "name" | "type" | "joinDate" | "nextPayment" | "status" | "payment" | "lastVisit";
+type SortDir = "asc" | "desc";
+
+function sortValue(m: MemberRow, key: SortKey): string | number | null {
+  switch (key) {
+    case "name":
+      return m.fullName.toLowerCase();
+    case "type":
+      return m.membership?.planName?.toLowerCase() ?? null;
+    case "joinDate":
+      return new Date(m.joinDate).getTime();
+    case "nextPayment":
+      return m.membership?.renewalDate ? new Date(m.membership.renewalDate).getTime() : null;
+    case "status":
+      return m.membership?.status ?? null;
+    case "payment":
+      return m.membership?.paymentStatus ?? null;
+    case "lastVisit":
+      return m.lastVisitAt ? new Date(m.lastVisitAt).getTime() : null;
+  }
+}
+
+/** Nulls always sort last, regardless of direction — a missing value isn't
+ * meaningfully "smallest" or "largest". */
+function compareRows(a: MemberRow, b: MemberRow, key: SortKey, dir: SortDir): number {
+  const av = sortValue(a, key);
+  const bv = sortValue(b, key);
+  if (av == null && bv == null) return 0;
+  if (av == null) return 1;
+  if (bv == null) return -1;
+  const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+  return dir === "asc" ? cmp : -cmp;
+}
+
+function SortableHead({
+  label,
+  sortKey,
+  activeKey,
+  dir,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  activeKey: SortKey | null;
+  dir: SortDir;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = activeKey === sortKey;
+  const Icon = active ? (dir === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
+  return (
+    <TableHead>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onSort(sortKey);
+        }}
+        className={cn("inline-flex items-center gap-1 transition-colors hover:text-foreground", active && "text-foreground")}
+      >
+        {label}
+        <Icon className={cn("size-3.5", !active && "opacity-50")} />
+      </button>
+    </TableHead>
+  );
+}
+
 export function MemberList({ members }: { members: MemberRow[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = React.useState<Tab>("All");
   const [query, setQuery] = React.useState("");
+  const [sortKey, setSortKey] = React.useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = React.useState<SortDir>("asc");
   const [dialogOpen, setDialogOpen] = React.useState(() => {
     const p = searchParams.get("new");
     return p === "1" || p === "note";
   });
+
+  function handleSort(key: SortKey) {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("asc");
+    } else if (sortDir === "asc") {
+      setSortDir("desc");
+    } else {
+      setSortKey(null); // third click clears back to the natural (server) order
+    }
+  }
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -71,6 +150,8 @@ export function MemberList({ members }: { members: MemberRow[] }) {
     }
     return true;
   });
+
+  const sorted = sortKey ? [...filtered].sort((a, b) => compareRows(a, b, sortKey, sortDir)) : filtered;
 
   return (
     <div className="space-y-4">
@@ -124,18 +205,18 @@ export function MemberList({ members }: { members: MemberRow[] }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Member</TableHead>
+                <SortableHead label="Member" sortKey="name" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
                 <TableHead>Contact</TableHead>
-                <TableHead>Membership Type</TableHead>
-                <TableHead>Join Date</TableHead>
-                <TableHead>Next Payment</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead>Last Visit</TableHead>
+                <SortableHead label="Membership Type" sortKey="type" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableHead label="Join Date" sortKey="joinDate" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableHead label="Next Payment" sortKey="nextPayment" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableHead label="Status" sortKey="status" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableHead label="Payment" sortKey="payment" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableHead label="Last Visit" sortKey="lastVisit" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((m) => (
+              {sorted.map((m) => (
                 <TableRow key={m.id} className="cursor-pointer" onClick={() => router.push(`/gym/members/${m.id}`)}>
                   <TableCell>
                     <div className="flex items-center gap-2.5">
