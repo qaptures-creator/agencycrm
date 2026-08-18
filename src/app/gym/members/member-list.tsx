@@ -12,6 +12,7 @@ import { PersonAvatar } from "@/components/ui/avatar";
 import { GymStatusBadge } from "@/components/gym/status-badge";
 import { MEMBERSHIP_STATUSES, PAYMENT_STATUSES } from "@/lib/gym/constants";
 import { MemberForm } from "./member-form";
+import { ImportSalesReportDialog } from "./import-sales-report-dialog";
 import { formatDate, cn } from "@/lib/utils";
 
 export type MemberRow = {
@@ -108,7 +109,7 @@ function SortableHead({
   );
 }
 
-export function MemberList({ members }: { members: MemberRow[] }) {
+export function MemberList({ members, canImport }: { members: MemberRow[]; canImport: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = React.useState<Tab>("All");
@@ -170,10 +171,13 @@ export function MemberList({ members }: { members: MemberRow[] }) {
             </button>
           ))}
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
-          <Plus className="size-4" />
-          Add Member
-        </Button>
+        <div className="flex items-center gap-2">
+          {canImport && <ImportSalesReportDialog />}
+          <Button size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
+            <Plus className="size-4" />
+            Add Member
+          </Button>
+        </div>
       </div>
 
       <div className="relative max-w-sm">

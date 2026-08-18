@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { requireGymUser } from "@/lib/gym/auth";
+import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MemberList, type MemberRow } from "./member-list";
 import { MemberMapView } from "./member-map-view";
 
 export default async function MembersPage() {
-  await requireGymUser();
+  const user = await requireGymUser();
+  const canImport = can(user.accessRole as GymAccessRole, "manageMemberships");
 
   const [membersRaw, plans] = await Promise.all([
     prisma.gymMember.findMany({
@@ -52,7 +54,7 @@ export default async function MembersPage() {
         </TabsList>
 
         <TabsContent value="list">
-          <MemberList members={members} />
+          <MemberList members={members} canImport={canImport} />
         </TabsContent>
 
         <TabsContent value="map">
