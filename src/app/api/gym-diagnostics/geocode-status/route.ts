@@ -12,6 +12,19 @@ export async function GET(req: Request) {
   const byStatus = await prisma.gymMember.groupBy({ by: ["geocodeStatus"], _count: { _all: true } });
   const withAddress = await prisma.gymMember.count({ where: { address: { not: null } } });
   const gymSettings = await prisma.gymSettings.findUnique({ where: { id: "singleton" } });
+  const samples = await prisma.gymMember.findMany({
+    where: { geocodeStatus: "OK" },
+    select: { postcode: true, placeName: true, latitude: true, longitude: true, distanceMiles: true },
+    take: 8,
+  });
+  const areaCounts = await prisma.gymMember.groupBy({ by: ["placeName"], where: { geocodeStatus: "OK" }, _count: { _all: true } });
 
-  return NextResponse.json({ total, withAddress, byStatus, gymSettings });
+  return NextResponse.json({
+    total,
+    withAddress,
+    byStatus,
+    gymSettings,
+    samples,
+    topAreas: areaCounts.sort((a, b) => b._count._all - a._count._all).slice(0, 10),
+  });
 }
