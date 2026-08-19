@@ -25,6 +25,10 @@ import {
   getMembershipSnapshot,
   getAlerts,
 } from "@/lib/gym/dashboard-data";
+import { getAshbourneDiagnosticEnvSummary } from "@/lib/ashbourne/config";
+import { getLatestAshbourneSyncLog } from "@/lib/ashbourne/sync";
+import { AshbourneSyncPanel } from "@/app/gym/integrations/ashbourne-sync-panel";
+import { Landmark } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
@@ -46,8 +50,9 @@ export default async function GymDashboardPage() {
   const user = await requireGymUser();
   const role = user.accessRole as GymAccessRole;
   const showFinance = can(role, "viewFinance");
+  const showAshbourne = can(role, "manageIntegrations");
 
-  const [kpis, todayStaff, todayTasks, recentEnquiries, membershipSnapshot, alerts, revenue] = await Promise.all([
+  const [kpis, todayStaff, todayTasks, recentEnquiries, membershipSnapshot, alerts, revenue, ashbourneLastLogRaw] = await Promise.all([
     getDashboardKpis(),
     getTodayStaff(),
     getTodayTasks(),
@@ -55,7 +60,22 @@ export default async function GymDashboardPage() {
     getMembershipSnapshot(),
     getAlerts(),
     showFinance ? getRevenueSnapshot() : Promise.resolve(null),
+    showAshbourne ? getLatestAshbourneSyncLog() : Promise.resolve(null),
   ]);
+
+  const ashbourneEnvSummary = showAshbourne ? getAshbourneDiagnosticEnvSummary() : null;
+  const ashbourneLastLog = ashbourneLastLogRaw
+    ? {
+        startedAt: ashbourneLastLogRaw.startedAt.toISOString(),
+        completedAt: ashbourneLastLogRaw.completedAt?.toISOString() ?? null,
+        status: ashbourneLastLogRaw.status,
+        recordsFound: ashbourneLastLogRaw.recordsFound,
+        created: ashbourneLastLogRaw.created,
+        updated: ashbourneLastLogRaw.updated,
+        reviewRequired: ashbourneLastLogRaw.reviewRequired,
+        failed: ashbourneLastLogRaw.failed,
+      }
+    : null;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -321,6 +341,23 @@ export default async function GymDashboardPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {showAshbourne && ashbourneEnvSummary && (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-2">
+              <Landmark className="size-4 text-primary" />
+              <CardTitle className="text-sm font-semibold">Ashbourne Sync</CardTitle>
+            </div>
+            <Link href="/gym/integrations" className="text-xs text-primary hover:underline">
+              Full integration settings
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <AshbourneSyncPanel envSummary={ashbourneEnvSummary} lastLog={ashbourneLastLog} />
+          </CardContent>
+        </Card>
       )}
     </div>
   );
