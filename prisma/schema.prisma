@@ -508,6 +508,23 @@ model GymMember {
   geocodeStatus String? // OK | FAILED | NO_POSTCODE — null means never attempted
   geocodedAt    DateTime?
 
+  // --- Ashbourne BI sync (see src/lib/ashbourne/) ---
+  // memberNumber above is already the Ashbourne Member No for anyone
+  // created via the CSV import (src/lib/gym/ashbourne-sales-import.ts uses
+  // InternalID directly) — ashbourneMemberNo is the authoritative link
+  // going forward, but sync matching also checks memberNumber first so it
+  // never creates a duplicate for those existing records.
+  ashbourneMemberNo       String?   @unique
+  ashbourneLastSyncedAt   DateTime?
+  ashbourneStatus         String? // raw status string from the Ashbourne report
+  ashbourneMembershipType String?
+  ashbourneExpiryDate     DateTime?
+  // Set when an incoming Ashbourne record matched more than one existing
+  // CRM member by email (or another non-definitive signal) — sync refuses
+  // to guess, and this member needs a human to confirm/link it manually.
+  reviewRequired          Boolean   @default(false)
+  reviewRequiredReason    String?
+
   memberships GymMembership[]
   memberNotes GymMemberNote[]
   payments    GymPayment[]
@@ -1203,4 +1220,34 @@ model GymEmailSyncState {
   lastRunError  String?
   folderState   Json? // { [role]: { uidValidity, lastUid, oldestSyncedSeq } }
   updatedAt     DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Ashbourne BI member sync (see src/lib/ashbourne/)
+// ---------------------------------------------------------------------------
+
+/**
+ * One row per sync run (manual "Sync Now" or, later, scheduled) — the
+ * audit trail for what Ashbourne actually returned and what the sync did
+ * with it. Distinct from GymPosSyncState/GymEmailSyncState (which are
+ * singleton checkpoints) because Phase 10's dry-run requirement means we
+ * need to see the *history* of runs, not just the latest one.
+ */
+model GymAshbourneSyncLog {
+  id             String    @id @default(cuid())
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  status         String    @default("RUNNING") // RUNNING | OK | ERROR
+  dryRun         Boolean   @default(false)
+  recordsFound   Int?
+  created        Int?
+  updated        Int?
+  unchanged      Int?
+  reviewRequired Int?
+  skipped        Int?
+  failed         Int?
+  errorMessage   String?
+  reportUrl      String? // which Ashbourne report this run used — configurable per Phase 11
+
+  @@index([startedAt])
 }

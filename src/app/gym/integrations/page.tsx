@@ -7,8 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { INTEGRATION_LABELS } from "@/lib/gym/constants";
 import { formatDateTime } from "@/lib/utils";
 import { getEmailDiagnosticEnvSummary } from "@/lib/email/config";
+import { getAshbourneDiagnosticEnvSummary } from "@/lib/ashbourne/config";
 import { WebsiteToggle } from "./website-toggle";
 import { EmailDiagnosticPanel } from "./email-diagnostic-panel";
+import { AshbourneSyncPanel } from "./ashbourne-sync-panel";
 
 const ICONS: Record<string, LucideIcon> = {
   EMAIL: Mail,
@@ -22,7 +24,7 @@ const DESCRIPTIONS: Record<string, string> = {
   EMAIL:
     "The 123 Reg mailbox behind the Email Centre — read/send access over IMAP/SMTP, configured entirely via Railway environment variables. Credentials never reach the browser.",
   ASHBOURNE:
-    "Syncs membership and finance data (members, memberships, payments) from Ashbourne Management. The adapter architecture already exists in code at src/lib/gym/integrations/ashbourne-provider.ts, ready for real credentials once available.",
+    "Enriches existing Members with data from Ashbourne BI (status, membership type, expiry, contact info) via a headless-browser connector against your authorised Ashbourne account. Never duplicates existing members — matches on Ashbourne Member No first, then existing member number, then a conservative single email match.",
   WEBSITE:
     "Represents the musclemassacre.com contact/enquiry form feeding into this CRM. Toggling this administratively marks that the webhook has been wired up outside this app — it does not create a real connection by itself.",
   GOOGLE_CALENDAR: "Optional future integration to sync staff rota and bookings with Google Calendar.",
@@ -33,8 +35,25 @@ export default async function IntegrationsPage() {
   const user = await requirePermission("manageIntegrations");
   const canManageEmail = can(user.accessRole as GymAccessRole, "manageEmail");
   const emailEnvSummary = getEmailDiagnosticEnvSummary();
+  const ashbourneEnvSummary = getAshbourneDiagnosticEnvSummary();
 
-  const integrations = await prisma.gymIntegration.findMany({ orderBy: { provider: "asc" } });
+  const [integrations, ashbourneLastLogRaw] = await Promise.all([
+    prisma.gymIntegration.findMany({ orderBy: { provider: "asc" } }),
+    prisma.gymAshbourneSyncLog.findFirst({ orderBy: { startedAt: "desc" }, where: { dryRun: false } }),
+  ]);
+  const ashbourneLastLog = ashbourneLastLogRaw
+    ? {
+        startedAt: ashbourneLastLogRaw.startedAt.toISOString(),
+        completedAt: ashbourneLastLogRaw.completedAt?.toISOString() ?? null,
+        status: ashbourneLastLogRaw.status,
+        recordsFound: ashbourneLastLogRaw.recordsFound,
+        created: ashbourneLastLogRaw.created,
+        updated: ashbourneLastLogRaw.updated,
+        reviewRequired: ashbourneLastLogRaw.reviewRequired,
+        failed: ashbourneLastLogRaw.failed,
+      }
+    : null;
+
   const order = ["EMAIL", "ASHBOURNE", "WEBSITE", "GOOGLE_CALENDAR", "META"];
   const sorted = [...integrations].sort((a, b) => order.indexOf(a.provider) - order.indexOf(b.provider));
 
@@ -73,11 +92,8 @@ export default async function IntegrationsPage() {
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">{DESCRIPTIONS[integration.provider] ?? "No description available."}</p>
 
-                {integration.provider === "ASHBOURNE" && !connected && (
-                  <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
-                    Not connected — no provider is implemented yet, so this can&apos;t be marked connected from the UI. This
-                    will only change once real credentials are wired up in code.
-                  </div>
+                {integration.provider === "ASHBOURNE" && (
+                  <AshbourneSyncPanel envSummary={ashbourneEnvSummary} lastLog={ashbourneLastLog} />
                 )}
 
                 {integration.provider === "EMAIL" && (
