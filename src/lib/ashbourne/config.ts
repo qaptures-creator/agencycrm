@@ -18,6 +18,7 @@ export class AshbourneNotConfiguredError extends Error {
 
 export type AshbourneConfig = {
   baseUrl: string;
+  clubId: string;
   username: string;
   password: string;
   memberReportUrl: string;
@@ -31,12 +32,14 @@ function parseBool(v: string | undefined, fallback: boolean): boolean {
 
 export function getAshbourneConfig(): AshbourneConfig {
   const baseUrl = process.env.ASHBOURNE_BASE_URL;
+  const clubId = process.env.ASHBOURNE_CLUB_ID;
   const username = process.env.ASHBOURNE_USERNAME;
   const password = process.env.ASHBOURNE_PASSWORD;
   const memberReportUrl = process.env.ASHBOURNE_MEMBER_REPORT_URL;
 
   const missing: string[] = [];
   if (!baseUrl) missing.push("ASHBOURNE_BASE_URL");
+  if (!clubId) missing.push("ASHBOURNE_CLUB_ID");
   if (!username) missing.push("ASHBOURNE_USERNAME");
   if (!password) missing.push("ASHBOURNE_PASSWORD");
   if (!memberReportUrl) missing.push("ASHBOURNE_MEMBER_REPORT_URL");
@@ -44,6 +47,7 @@ export function getAshbourneConfig(): AshbourneConfig {
 
   return {
     baseUrl: baseUrl!.replace(/\/+$/, ""),
+    clubId: clubId!,
     username: username!,
     password: password!,
     memberReportUrl: memberReportUrl!,

@@ -5,22 +5,19 @@ import { AshbourneConnectorError } from "./types";
 import { captureDebugScreenshot } from "./client";
 
 /**
- * Logs into Ashbourne BI. We don't have visibility into the exact WebForms
- * markup (field IDs/names) without real credentials to test against, so
- * this deliberately avoids guessing framework-specific selectors:
+ * Logs into Ashbourne BI. The real login page (confirmed against the live
+ * site) has three fields, not the generic two: Club ID, then Username, then
+ * Password — Club ID is a plain text input appearing before Username, so a
+ * naive "first text field = username" guess fills the wrong box. Detection:
  *
  *  - The password field is located via `input[type="password"]`, which is
  *    reliable regardless of ASP.NET's auto-generated control IDs.
- *  - The username field is taken as the last visible text/email input
- *    appearing before the password field — the near-universal layout for a
- *    login form.
+ *  - All visible text/email inputs appearing before the password field are
+ *    collected in DOM order. Two fields = [Club ID, Username]. One field =
+ *    [Username] only, for any install that turns out not to need a Club ID.
  *  - Submission uses Enter in the password field (submits the form in
  *    virtually every browser/framework) rather than hunting for a specific
  *    submit button selector.
- *
- * If Ashbourne's real login page doesn't fit this shape, this is the first
- * place to adjust once we can see actual error output/screenshots from a
- * real run — see the debug screenshot attached to AshbourneConnectorError.
  */
 export async function loginToAshbourne(page: Page, cfg: AshbourneConfig): Promise<void> {
   try {
@@ -38,13 +35,18 @@ export async function loginToAshbourne(page: Page, cfg: AshbourneConfig): Promis
     throw error;
   }
 
-  const usernameField = page.locator('input[type="text"], input[type="email"]').first();
-  const usernameVisible = await usernameField.isVisible().catch(() => false);
-  if (!usernameVisible) {
+  const textFields = page.locator('input[type="text"], input[type="email"]');
+  const textFieldCount = await textFields.count();
+  if (textFieldCount === 0) {
     throw new AshbourneConnectorError("login-form-not-found", "No username field found on the Ashbourne login page.");
   }
 
-  await usernameField.fill(cfg.username);
+  if (textFieldCount >= 2) {
+    await textFields.nth(0).fill(cfg.clubId);
+    await textFields.nth(1).fill(cfg.username);
+  } else {
+    await textFields.nth(0).fill(cfg.username);
+  }
   await passwordField.fill(cfg.password);
 
   const urlBeforeSubmit = page.url();
