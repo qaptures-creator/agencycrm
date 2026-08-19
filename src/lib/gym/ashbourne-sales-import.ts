@@ -118,10 +118,16 @@ export async function importAshbourneSalesReport(rows: AshbourneSalesRow[]): Pro
     }
 
     // --- Member: create only if missing ---
+    // `joinDate` is this row's transaction date, which for Day Pass rows can
+    // be a forward-dated/pre-booked visit — a member's join date can never
+    // legitimately be in the future, so it's capped at today for the member
+    // record itself. The transaction's real date is still used below for the
+    // membership/payment records, where it's correct.
+    const memberJoinDate = joinDate > new Date() ? new Date() : joinDate;
     let member = await prisma.gymMember.findUnique({ where: { memberNumber: row.internalId } });
     if (!member) {
       member = await prisma.gymMember.create({
-        data: { memberNumber: row.internalId, fullName: row.name, joinDate },
+        data: { memberNumber: row.internalId, fullName: row.name, joinDate: memberJoinDate },
       });
       summary.membersCreated++;
     }
