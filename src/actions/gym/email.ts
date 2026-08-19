@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
 import { assertPermission } from "@/lib/gym/auth";
 import { syncAllFolders, loadOlderMessages, isSyncStale } from "@/lib/email/sync";
 import { fetchMessageDetail, type MessageDetail } from "@/lib/email/message-detail";
@@ -37,13 +38,13 @@ export async function getMessageDetailAction(id: string): Promise<MessageDetail>
   const row = await getMessageRow(id);
   if (!row) throw new Error("Message not found");
 
-  const detail = await fetchMessageDetail(row.imapPath, row.imapUid);
+  const detail = await fetchMessageDetail(row.imapPath, row.imapUid, { markSeen: !row.isRead });
 
   if (!row.isRead) {
-    await setMessageReadState(id, true).catch(() => {
-      // Best-effort — the detail itself already fetched successfully, so
-      // don't fail the whole open just because the flag update didn't land.
-    });
+    // Best-effort — the detail itself already fetched (and the IMAP flag
+    // update above already landed in the same connection), so don't fail
+    // the whole open just because this local mirror update didn't.
+    await prisma.gymEmailMessage.update({ where: { id }, data: { isRead: true } }).catch(() => {});
   }
 
   revalidatePath("/gym/email");

@@ -56,13 +56,29 @@ async function collectStream(stream: NodeJS.ReadableStream): Promise<Buffer> {
 }
 
 /** Fetches and parses the full message body on demand — never persisted,
- * always read live from IMAP so the mailbox stays the source of truth. */
-export async function fetchMessageDetail(path: string, uid: number): Promise<MessageDetail> {
+ * always read live from IMAP so the mailbox stays the source of truth.
+ *
+ * When markSeen is set, the \Seen flag is set in the same connection right
+ * after downloading — imapflow's download() doesn't use BODY.PEEK[], so the
+ * mailbox is opened read-only here specifically to avoid an accidental
+ * implicit mark-as-read, and the explicit flag update below is what
+ * actually marks it. Doing both in one connection (rather than a second
+ * withImapClient call afterward) avoids paying for a second full TCP/TLS/
+ * login round-trip to the mail server just to flip one flag. */
+export async function fetchMessageDetail(path: string, uid: number, opts?: { markSeen?: boolean }): Promise<MessageDetail> {
   return withImapClient(async (client) => {
     await client.mailboxOpen(path, { readOnly: true });
     const dl = await client.download(String(uid), undefined, { uid: true });
     const raw = await collectStream(dl.content);
     const parsed = await simpleParser(raw, { skipHtmlToText: true });
+
+    if (opts?.markSeen) {
+      // EXAMINE (readOnly) forbids flag changes, so re-open the mailbox
+      // writable for this one STORE command — still the same connection,
+      // no new login.
+      await client.mailboxOpen(path, { readOnly: false });
+      await client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true });
+    }
 
     return {
       subject: parsed.subject ?? null,
