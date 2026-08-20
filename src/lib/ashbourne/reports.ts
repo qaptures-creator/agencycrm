@@ -1,99 +1,57 @@
 import "server-only";
 import type { Page } from "playwright";
 import type { AshbourneConfig } from "./config";
-import type { AshbourneFetchResult, AshbourneMember } from "./types";
+import type { AshbourneFetchResult } from "./types";
 import { AshbourneConnectorError } from "./types";
 import { captureDebugScreenshot } from "./client";
-import { parseCsvExport, rowsToMembers } from "./parser";
+import { rowsToMembers } from "./parser";
 
-const MAX_GRID_PAGES = 200; // safety cap against an infinite pagination loop
+/**
+ * Retrieves members from Ashbourne's "New Members (All)" report — a
+ * multi-step ASP.NET WebForms wizard, confirmed against the real site
+ * (2026-08-20 diagnostic probe), not guessed:
+ *
+ *  1. Land on the report config page (memberReportUrl) — shows a
+ *     pre-computed count and Filter/Campaign/Next controls.
+ *  2. "Filter" opens a date-range modal; "Apply" closes it (uses whatever
+ *     range is currently set — see the module comment on date-range
+ *     handling below for why this isn't customized yet).
+ *  3. "Campaign" opens a "Report Destination" modal — a set of radio
+ *     options (SMS/PUSH/EMAIL/EXPORT/VIEW DATA/E-Mail Template). Selecting
+ *     "VIEW DATA" and clicking "OK" is what closes this modal — a fully
+ *     confirmed step from a debug screenshot showing exactly what it
+ *     failed on: the modal was still open and physically intercepted the
+ *     next click, aborting the whole run with an empty result.
+ *  4. The "Next >>" button (verified id: ctl00_cpMain_btnNext) submits and
+ *     navigates to campaignscreen.aspx, which renders the real results
+ *     grid at the verified id ctl00_cpMain_gvReport, with data rows
+ *     matching tr.gridCell.
+ *
+ * The previous version of this file guessed at a generic "Run/Search/View
+ * Report" button and a generic `table` selector — neither exists on the
+ * real page, so it silently stayed on the config page and picked up an
+ * unrelated `<table>` element elsewhere on it, returning an empty member
+ * list without ever throwing. That's why Dry Run was reporting "success"
+ * with Found: 0. Every step below throws a specific, named
+ * AshbourneConnectorError if its expected control isn't found, rather than
+ * silently falling through — and a genuinely empty results grid is treated
+ * as a failure (see the bottom of fetchAshbourneMembers), not a normal
+ * zero-record sync, since Ashbourne is expected to always have current
+ * members.
+ *
+ * Not yet implemented: setting a custom date range before "Apply" (this
+ * accepts whatever range the report already has active) and pagination
+ * beyond the first results page. Per the plan, page 1 needs to be proven
+ * working before either of those is tackled.
+ */
 
-async function collectStream(stream: NodeJS.ReadableStream): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream) chunks.push(chunk as Buffer);
-  return Buffer.concat(chunks);
+async function withDebugScreenshot(page: Page, step: string, message: string): Promise<AshbourneConnectorError> {
+  const debug = await captureDebugScreenshot(page);
+  const error = new AshbourneConnectorError(step, message);
+  (error as AshbourneConnectorError & { debugScreenshotBase64?: string | null }).debugScreenshotBase64 = debug;
+  return error;
 }
 
-/** Tries the report's export control first (gets the full dataset in one
- * shot, sidestepping WebForms pagination entirely) — only CSV-shaped
- * exports are parsed; anything else (e.g. a binary XLSX) is reported back
- * rather than silently mis-parsed. */
-async function tryExport(page: Page): Promise<AshbourneMember[] | null> {
-  const exportControl = page.getByText(/export/i).first();
-  const found = await exportControl.isVisible().catch(() => false);
-  if (!found) return null;
-
-  const downloadPromise = page.waitForEvent("download", { timeout: 10_000 }).catch(() => null);
-  await exportControl.click().catch(() => {});
-  const download = await downloadPromise;
-  if (!download) return null; // clicking "export" didn't trigger a real download — fall back to scraping
-
-  const filename = download.suggestedFilename();
-  const stream = await download.createReadStream();
-  if (!stream) return null;
-  const buffer = await collectStream(stream);
-
-  const looksBinary = buffer.subarray(0, 2).toString("hex") === "504b"; // PK.. zip signature (xlsx/docx/etc.)
-  if (looksBinary || /\.xlsx?$/i.test(filename)) {
-    throw new AshbourneConnectorError(
-      "export-format-unsupported",
-      `Ashbourne's export produced "${filename}", which looks like an Excel file — this connector only parses CSV exports today. Either configure the report to export CSV, or ask for XLSX support to be added.`
-    );
-  }
-
-  return parseCsvExport(buffer.toString("utf-8"));
-}
-
-/** Falls back to scraping the on-page results grid, paging through it via
- * whatever "next page" control the WebForms grid exposes. */
-async function scrapeGrid(page: Page): Promise<AshbourneMember[]> {
-  const table = page.locator("table").first();
-  const tableFound = await table.isVisible().catch(() => false);
-  if (!tableFound) {
-    const debug = await captureDebugScreenshot(page);
-    const error = new AshbourneConnectorError("no-results-table", "No results table found on the report page after running it.");
-    (error as AshbourneConnectorError & { debugScreenshotBase64?: string | null }).debugScreenshotBase64 = debug;
-    throw error;
-  }
-
-  const headerCells = await table.locator("thead th, tr:first-child th, tr:first-child td").allTextContents();
-  const headers = headerCells.map((h) => h.trim());
-  if (headers.length === 0) {
-    throw new AshbourneConnectorError("no-headers-found", "Found a results table but couldn't read any column headers from it.");
-  }
-
-  const allRows: string[][] = [];
-  let pageIndex = 0;
-
-  while (pageIndex < MAX_GRID_PAGES) {
-    const bodyRows = table.locator("tbody tr, tr:not(:first-child)");
-    const count = await bodyRows.count();
-    for (let i = 0; i < count; i++) {
-      const cells = await bodyRows.nth(i).locator("td").allTextContents();
-      if (cells.length > 0) allRows.push(cells.map((c) => c.trim()));
-    }
-
-    const nextControl = page.getByRole("link", { name: /^next$/i }).first();
-    const hasNext = await nextControl.isVisible().catch(() => false);
-    if (!hasNext) break;
-
-    const disabled = await nextControl.getAttribute("aria-disabled").catch(() => null);
-    if (disabled === "true") break;
-
-    await nextControl.click().catch(() => {
-      // Couldn't click "next" — stop here rather than looping forever.
-    });
-    await page.waitForTimeout(500); // WebForms postback settle time
-    pageIndex++;
-  }
-
-  return rowsToMembers(allRows, headers);
-}
-
-/** Navigates directly to the configured report URL (avoids needing to
- * simulate clicking through an unknown menu structure), runs it if there's
- * a run/search control, and retrieves the member list — export preferred,
- * grid scrape as fallback. */
 export async function fetchAshbourneMembers(page: Page, cfg: AshbourneConfig): Promise<AshbourneFetchResult> {
   try {
     await page.goto(cfg.memberReportUrl, { waitUntil: "domcontentloaded" });
@@ -101,26 +59,93 @@ export async function fetchAshbourneMembers(page: Page, cfg: AshbourneConfig): P
     throw new AshbourneConnectorError("navigate-report", `Could not reach the report URL: ${err instanceof Error ? err.message : "unknown error"}`);
   }
 
-  // Some reports need an explicit "Run"/"Search"/"View Report" click before
-  // showing results — only click one if it's actually present.
-  const runControl = page.getByRole("button", { name: /^(run|search|view report|generate)$/i }).first();
-  const hasRunControl = await runControl.isVisible().catch(() => false);
-  if (hasRunControl) {
-    await runControl.click();
-    await page.waitForTimeout(1000);
+  // --- Step: Filter -> Apply (accepts the report's current date range) ---
+  const filterBtn = page.getByRole("button", { name: /^filter$/i }).first();
+  const filterVisible = await filterBtn.isVisible().catch(() => false);
+  if (filterVisible) {
+    await filterBtn.click();
+    await page.waitForTimeout(500);
+    const applyBtn = page.getByRole("button", { name: /^apply$/i }).first();
+    const applyVisible = await applyBtn.isVisible().catch(() => false);
+    if (applyVisible) {
+      await applyBtn.click();
+      await page.waitForTimeout(500);
+    }
   }
 
-  const exported = await tryExport(page);
-  if (exported) {
-    return { members: exported, method: "export", debug: { reportUrl: cfg.memberReportUrl } };
+  // --- Step: Campaign -> select "VIEW DATA" -> OK ---
+  const campaignBtn = page.getByRole("button", { name: /^campaign$/i }).first();
+  const campaignVisible = await campaignBtn.isVisible().catch(() => false);
+  if (!campaignVisible) {
+    throw await withDebugScreenshot(page, "campaign-button-not-found", "Could not find the 'Campaign' button on the report config page — the page layout may have changed.");
+  }
+  await campaignBtn.click();
+  await page.waitForTimeout(500);
+
+  const viewDataOption = page.getByText(/^view data$/i).first();
+  const viewDataVisible = await viewDataOption.isVisible().catch(() => false);
+  if (!viewDataVisible) {
+    throw await withDebugScreenshot(page, "view-data-option-not-found", "Could not find the 'VIEW DATA' campaign destination option in the Report Destination modal.");
+  }
+  await viewDataOption.click();
+
+  const okBtn = page.getByRole("button", { name: /^ok$/i }).first();
+  const okVisible = await okBtn.isVisible().catch(() => false);
+  if (!okVisible) {
+    throw await withDebugScreenshot(page, "campaign-ok-not-found", "Selected 'VIEW DATA' but couldn't find the OK button to confirm the Report Destination modal.");
+  }
+  await okBtn.click();
+  await page.waitForTimeout(500);
+
+  // --- Step: Next >> -> submit -> navigate to campaignscreen.aspx ---
+  const nextBtn = page.locator("#ctl00_cpMain_btnNext");
+  const nextVisible = await nextBtn.isVisible().catch(() => false);
+  if (!nextVisible) {
+    throw await withDebugScreenshot(page, "next-button-not-found", "Could not find the report's Next button (#ctl00_cpMain_btnNext) — the Report Destination modal may still be open and blocking it.");
+  }
+  const urlBeforeNext = page.url();
+  await nextBtn.click();
+  try {
+    await page.waitForFunction((prevUrl) => window.location.href !== prevUrl, urlBeforeNext, { timeout: 15_000 });
+  } catch {
+    await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
   }
 
-  const scraped = await scrapeGrid(page);
-  const headers = await page
-    .locator("table")
-    .first()
-    .locator("thead th, tr:first-child th, tr:first-child td")
-    .allTextContents()
-    .catch(() => []);
-  return { members: scraped, method: "grid-scrape", debug: { reportUrl: cfg.memberReportUrl, columnsFound: headers } };
+  // --- Results: verified real grid, not a generic `table` guess ---
+  const gridLocator = page.locator("#ctl00_cpMain_gvReport");
+  const gridExists = (await gridLocator.count()) > 0;
+  if (!gridExists) {
+    throw await withDebugScreenshot(
+      page,
+      "results-grid-not-found",
+      `Expected the results grid (#ctl00_cpMain_gvReport) after submitting the report, but it wasn't there. Final URL: ${page.url()}`
+    );
+  }
+
+  const headerCells = await gridLocator.locator("tr").first().locator("th, td").allTextContents();
+  const headers = headerCells.map((h) => h.trim());
+
+  const rowLocator = gridLocator.locator("tr.gridCell");
+  const rowCount = await rowLocator.count();
+  const allRows: string[][] = [];
+  for (let i = 0; i < rowCount; i++) {
+    const cells = await rowLocator.nth(i).locator("td").allTextContents();
+    if (cells.length > 0) allRows.push(cells.map((c) => c.trim()));
+  }
+
+  const members = rowsToMembers(allRows, headers);
+
+  // Ashbourne is expected to always have current members — an empty result
+  // here means something's wrong upstream (wrong filter, wrong report
+  // state, a markup change), not a legitimately empty sync. Fail loudly
+  // instead of reporting a false "success".
+  if (members.length === 0) {
+    throw await withDebugScreenshot(
+      page,
+      "zero-records-retrieved",
+      `Reached the results page (${page.url()}) but the grid returned 0 member rows (${rowCount} grid rows found, ${headers.length} columns). Treating this as a failure rather than a valid empty sync.`
+    );
+  }
+
+  return { members, method: "grid-scrape", debug: { reportUrl: cfg.memberReportUrl, columnsFound: headers } };
 }
