@@ -4,8 +4,15 @@ import { GymGlobalSearch } from "@/components/gym/global-search";
 import { NotificationsBell, type NotificationItem } from "@/components/gym/notifications-bell";
 import { GymQuickAdd } from "@/components/gym/quick-add";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import type { NavBadgeCounts } from "@/lib/gym/nav-badges";
 
-export async function GymTopbar({ user }: { user: { id: string; name: string; accessRole: string } }) {
+export async function GymTopbar({
+  user,
+  badges,
+}: {
+  user: { id: string; name: string; accessRole: string };
+  badges: NavBadgeCounts;
+}) {
   const notificationRows = await prisma.gymNotification.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
@@ -24,7 +31,7 @@ export async function GymTopbar({ user }: { user: { id: string; name: string; ac
 
   return (
     <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur sm:px-6">
-      <MobileMenuButton user={user} />
+      <MobileMenuButton user={user} badges={badges} />
       <div className="min-w-0 flex-1">
         <GymGlobalSearch />
       </div>

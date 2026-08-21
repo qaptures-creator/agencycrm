@@ -10,17 +10,34 @@ import { roleLabel, type GymAccessRole } from "@/lib/gym/permissions";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/actions/gym/auth";
 import { initials } from "@/lib/utils";
+import type { NavBadgeCounts } from "@/lib/gym/nav-badges";
 
 type CurrentUser = { name: string; accessRole: string; position?: string | null };
+
+function NavBadge({ count, collapsed }: { count: number; collapsed?: boolean }) {
+  if (count <= 0) return null;
+  if (collapsed) {
+    return (
+      <span className="absolute right-1 top-1 flex size-2 rounded-full bg-destructive" aria-label={`${count} need attention`} />
+    );
+  }
+  return (
+    <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold text-destructive-foreground">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
 
 function NavLinks({
   role,
   collapsed,
   onNavigate,
+  badges,
 }: {
   role: GymAccessRole;
   collapsed?: boolean;
   onNavigate?: () => void;
+  badges?: NavBadgeCounts;
 }) {
   const pathname = usePathname();
   const items = navItemsForRole(role);
@@ -30,6 +47,7 @@ function NavLinks({
       {items.map((item) => {
         const active = item.href === "/gym" ? pathname === "/gym" : pathname.startsWith(item.href);
         const Icon = item.icon;
+        const badgeCount = badges?.[item.href as keyof NavBadgeCounts] ?? 0;
         return (
           <Link
             key={item.href}
@@ -37,7 +55,7 @@ function NavLinks({
             onClick={onNavigate}
             title={collapsed ? item.label : undefined}
             className={cn(
-              "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               collapsed && "justify-center px-0",
               active
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
@@ -51,6 +69,7 @@ function NavLinks({
               )}
             />
             {!collapsed && <span className="truncate">{item.label}</span>}
+            <NavBadge count={badgeCount} collapsed={collapsed} />
           </Link>
         );
       })}
@@ -105,7 +124,7 @@ function UserFooter({ user, collapsed }: { user: CurrentUser; collapsed?: boolea
   );
 }
 
-export function GymSidebar({ user }: { user: CurrentUser }) {
+export function GymSidebar({ user, badges }: { user: CurrentUser; badges?: NavBadgeCounts }) {
   const [collapsed, setCollapsed] = React.useState(false);
 
   React.useEffect(() => {
@@ -129,7 +148,7 @@ export function GymSidebar({ user }: { user: CurrentUser }) {
     >
       <Brand collapsed={collapsed} />
       <div className="flex-1 overflow-y-auto scrollbar-thin py-2">
-        <NavLinks role={user.accessRole as GymAccessRole} collapsed={collapsed} />
+        <NavLinks role={user.accessRole as GymAccessRole} collapsed={collapsed} badges={badges} />
       </div>
       <UserFooter user={user} collapsed={collapsed} />
       <button
@@ -146,10 +165,12 @@ export function GymMobileSidebar({
   open,
   onClose,
   user,
+  badges,
 }: {
   open: boolean;
   onClose: () => void;
   user: CurrentUser;
+  badges?: NavBadgeCounts;
 }) {
   // Lock background scroll while the drawer is open, and let Escape close it.
   React.useEffect(() => {
@@ -196,7 +217,7 @@ export function GymMobileSidebar({
           </button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-thin py-2">
-          <NavLinks role={user.accessRole as GymAccessRole} onNavigate={onClose} />
+          <NavLinks role={user.accessRole as GymAccessRole} onNavigate={onClose} badges={badges} />
         </div>
         <div className="pb-[env(safe-area-inset-bottom)]">
           <UserFooter user={user} />
