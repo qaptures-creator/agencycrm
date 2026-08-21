@@ -17,15 +17,9 @@ type CurrentUser = { name: string; accessRole: string; position?: string | null 
 function NavBadge({ count, collapsed }: { count: number; collapsed?: boolean }) {
   if (count <= 0) return null;
   if (collapsed) {
-    return (
-      <span className="absolute right-1 top-1 flex size-2 rounded-full bg-destructive" aria-label={`${count} need attention`} />
-    );
+    return <span className="absolute right-1 top-1 flex size-2 rounded-full bg-success" aria-label={`+${count} new`} />;
   }
-  return (
-    <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold text-destructive-foreground">
-      {count > 99 ? "99+" : count}
-    </span>
-  );
+  return <span className="shrink-0 text-xs font-semibold text-success">({count > 99 ? "99+" : `+${count}`})</span>;
 }
 
 function NavLinks({
@@ -68,8 +62,13 @@ function NavLinks({
                 active ? "text-sidebar-primary" : "text-sidebar-foreground/45 group-hover:text-sidebar-foreground"
               )}
             />
-            {!collapsed && <span className="truncate">{item.label}</span>}
-            <NavBadge count={badgeCount} collapsed={collapsed} />
+            {!collapsed && (
+              <span className="flex min-w-0 items-center gap-1.5 truncate">
+                <span className="truncate">{item.label}</span>
+                <NavBadge count={badgeCount} collapsed={collapsed} />
+              </span>
+            )}
+            {collapsed && <NavBadge count={badgeCount} collapsed={collapsed} />}
           </Link>
         );
       })}

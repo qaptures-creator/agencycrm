@@ -247,7 +247,12 @@ export async function reconcileGoodtillSync(options?: { lookbackDays?: number })
     const lookbackDays = options?.lookbackDays ?? 14;
     const from = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
     const { imported } = await importGoodtillSalesHistory({ from });
-    await touchSyncState({ lastSalesSyncAt: new Date(), lastSalesSyncStatus: "OK", lastSalesSyncError: null });
+    await touchSyncState({
+      lastSalesSyncAt: new Date(),
+      lastSalesSyncStatus: "OK",
+      lastSalesSyncError: null,
+      lastSalesSyncImportedCount: imported,
+    });
     return { categories: catalog.categories, products: catalog.products, salesChecked: imported };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

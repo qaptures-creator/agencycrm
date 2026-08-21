@@ -2,32 +2,41 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Sidebar nav badge counts — small, actionable "needs attention" numbers
- * shown next to a section's nav item, not a general activity feed. Each one
- * reuses an existing field and naturally clears itself as staff resolve the
- * underlying thing, rather than requiring separate per-user "seen/unseen"
- * tracking:
- *  - Members: reviewRequired === true (set by the Ashbourne sync when it
- *    can't confidently match a record to an existing member).
- *  - Shake Bar: GymPosWebhookEvent.status === "ERROR" (a SumUp webhook that
- *    failed to process).
- *
- * Enquiries previously showed a count of status === "NEW" here — removed
- * per request, it was more noise than signal on that section.
+ * Sidebar nav badge counts — shown as "(+N)" next to a section's label.
+ * Each one reuses an existing field/log rather than adding new per-user
+ * "seen/unseen" tracking:
+ *  - Enquiries: status === "NEW" (same definition as the existing "Unread"
+ *    tab on the Enquiries page) — a live "needs attention" count.
+ *  - Members: the most recent real (non-dry-run) Ashbourne sync's
+ *    `created` count — how many new members that sync brought in. Updates
+ *    each time a sync runs; a sync that creates nothing makes it disappear.
+ *  - Shake Bar: the most recent manual "Sync SumUp" run's imported sales
+ *    count (GymPosSyncState.lastSalesSyncImportedCount) — same idea,
+ *    mirrors the Ashbourne pattern.
  */
 export type NavBadgeCounts = {
+  "/gym/enquiries": number;
   "/gym/members": number;
   "/gym/shake-bar": number;
 };
 
 export async function getNavBadgeCounts(): Promise<NavBadgeCounts> {
-  const [membersNeedingReview, posWebhookErrors] = await Promise.all([
-    prisma.gymMember.count({ where: { reviewRequired: true } }),
-    prisma.gymPosWebhookEvent.count({ where: { status: "ERROR" } }),
+  const [newEnquiries, lastAshbourneSync, posSyncState] = await Promise.all([
+    prisma.gymEnquiry.count({ where: { status: "NEW" } }),
+    prisma.gymAshbourneSyncLog.findFirst({
+      where: { dryRun: false },
+      orderBy: { startedAt: "desc" },
+      select: { created: true },
+    }),
+    prisma.gymPosSyncState.findUnique({
+      where: { key: "goodtill" },
+      select: { lastSalesSyncImportedCount: true },
+    }),
   ]);
 
   return {
-    "/gym/members": membersNeedingReview,
-    "/gym/shake-bar": posWebhookErrors,
+    "/gym/enquiries": newEnquiries,
+    "/gym/members": lastAshbourneSync?.created ?? 0,
+    "/gym/shake-bar": posSyncState?.lastSalesSyncImportedCount ?? 0,
   };
 }
