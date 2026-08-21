@@ -55,20 +55,6 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
         <p className="text-sm text-muted-foreground">Customer enquiries, eventually fed live from admin@musclemassacre.com.</p>
       </div>
 
-      {!emailConnected && (
-        <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-          <p className="font-medium text-warning-foreground">Email Integration Required</p>
-          <p className="mt-1 text-muted-foreground">
-            admin@musclemassacre.com isn&apos;t connected yet, so enquiries are logged manually below. Connect Microsoft
-            365, Google Workspace or IMAP in{" "}
-            <a href="/gym/integrations" className="text-primary hover:underline">
-              Settings → Integrations
-            </a>{" "}
-            to pull emails in automatically.
-          </p>
-        </div>
-      )}
-
       <EnquiryInbox
         enquiries={enquiries.map((e) => ({
           id: e.id,
