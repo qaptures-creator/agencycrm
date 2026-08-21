@@ -18,8 +18,12 @@ export type LiveEntryRow = {
   entryTime: string;
   zone: string | null;
   device: string | null;
-  memberNumber: string;
+  /** Raw Card No from the gate log — not necessarily the member's Member
+   * No (see GymLiveEntryEvent schema comment). Shown as the identifier
+   * column when a member couldn't be matched. */
+  cardNumber: string;
   memberName: string | null;
+  memberNumber: string | null;
   membershipType: string | null;
   membershipStatus: string | null;
 };
@@ -29,8 +33,8 @@ function toRow(e: {
   entryTime: Date;
   zone: string | null;
   device: string | null;
-  memberNumber: string;
-  member: { fullName: string; memberships: { status: string; plan: { name: string } }[] } | null;
+  cardNumber: string;
+  member: { fullName: string; memberNumber: string; memberships: { status: string; plan: { name: string } }[] } | null;
 }): LiveEntryRow {
   const membership = e.member?.memberships[0] ?? null;
   return {
@@ -38,8 +42,9 @@ function toRow(e: {
     entryTime: e.entryTime.toISOString(),
     zone: e.zone,
     device: e.device,
-    memberNumber: e.memberNumber,
+    cardNumber: e.cardNumber,
     memberName: e.member?.fullName ?? null,
+    memberNumber: e.member?.memberNumber ?? null,
     membershipType: membership?.plan.name ?? null,
     membershipStatus: membership?.status ?? null,
   };
@@ -50,7 +55,7 @@ export async function getRecentLiveEntries(limit = 100): Promise<LiveEntryRow[]>
   const events = await prisma.gymLiveEntryEvent.findMany({
     orderBy: { entryTime: "desc" },
     take: limit,
-    select: { id: true, entryTime: true, zone: true, device: true, memberNumber: true, member: { select: memberSelect } },
+    select: { id: true, entryTime: true, zone: true, device: true, cardNumber: true, member: { select: memberSelect } },
   });
   return events.map(toRow);
 }
@@ -68,15 +73,15 @@ export async function getTodayLiveEntryStats(): Promise<LiveEntryTodayStats> {
 
   const [totalEventsToday, todaysEvents, latestRaw] = await Promise.all([
     prisma.gymLiveEntryEvent.count({ where: { entryTime: range } }),
-    prisma.gymLiveEntryEvent.findMany({ where: { entryTime: range }, select: { memberNumber: true } }),
+    prisma.gymLiveEntryEvent.findMany({ where: { entryTime: range }, select: { cardNumber: true } }),
     prisma.gymLiveEntryEvent.findMany({
       orderBy: { entryTime: "desc" },
       take: 5,
-      select: { id: true, entryTime: true, zone: true, device: true, memberNumber: true, member: { select: memberSelect } },
+      select: { id: true, entryTime: true, zone: true, device: true, cardNumber: true, member: { select: memberSelect } },
     }),
   ]);
 
-  const uniqueMembersToday = new Set(todaysEvents.map((e) => e.memberNumber)).size;
+  const uniqueMembersToday = new Set(todaysEvents.map((e) => e.cardNumber)).size;
 
   return {
     uniqueMembersToday,

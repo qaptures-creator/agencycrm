@@ -530,6 +530,13 @@ model GymMember {
   // going forward, but sync matching also checks memberNumber first so it
   // never creates a duplicate for those existing records.
   ashbourneMemberNo       String?   @unique
+  // Ashbourne's "Card No" — distinct from Member No (memberNumber above):
+  // Ashbourne allows these to differ for a member, and the live-entry gate
+  // log (see GymLiveEntryEvent) only ever reports Card No. Not enforced
+  // unique here — real Ashbourne data occasionally has blanks/dupes during
+  // card reissue, and a stray unique-constraint failure would silently
+  // drop that member's whole sync row.
+  ashbourneCardNumber     String?
   ashbourneLastSyncedAt   DateTime?
   ashbourneStatus         String? // raw status string from the Ashbourne report
   ashbourneMembershipType String?
@@ -552,6 +559,7 @@ model GymMember {
   @@index([phone])
   @@index([geocodeStatus])
   @@index([placeName])
+  @@index([ashbourneCardNumber])
 }
 
 model GymMemberNote {
@@ -1278,10 +1286,16 @@ model GymAshbourneSyncLog {
  * watcher is responsible for discarding that before it ever reaches this
  * endpoint. Never touches GymMembership/GymMember status — this is a
  * read-only entry log, not a membership signal.
+ *
+ * The Ashbourne log line identifies the swipe by Card No, not Member No
+ * ("Adding 60734 event to interrupt queue - Card No 4163432") — the two
+ * can differ for a given member, so this field is named/stored as
+ * cardNumber and matched against GymMember.ashbourneCardNumber first (see
+ * the webhook route for the full matching priority).
  */
 model GymLiveEntryEvent {
   id         String   @id @default(cuid())
-  memberNumber String // raw value from the bridge, kept even if unmatched
+  cardNumber String // raw Card No from the bridge, kept even if unmatched
   entryTime  DateTime
   zone       String?
   device     String?
@@ -1294,8 +1308,8 @@ model GymLiveEntryEvent {
 
   // Dedup + idempotency key: the Windows bridge may resend the same log
   // line (retry after a network blip, log file re-read); the same
-  // member/device/timestamp triple is treated as the same physical event.
-  @@unique([memberNumber, device, entryTime])
+  // card/device/timestamp triple is treated as the same physical event.
+  @@unique([cardNumber, device, entryTime])
   @@index([entryTime])
   @@index([memberId])
 }

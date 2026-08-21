@@ -3,6 +3,7 @@
 
 export type AshbourneMember = {
   memberNo: string;
+  cardNo?: string;
   firstName?: string;
   surname?: string;
   email?: string;

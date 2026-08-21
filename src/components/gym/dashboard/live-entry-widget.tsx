@@ -64,7 +64,7 @@ export function LiveEntryWidget({ initialTodayStats }: { initialTodayStats: Live
                     {e.memberName ?? "Unknown Member"}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {e.memberNumber} · {e.zone ?? "—"}
+                    {e.memberNumber ?? e.cardNumber} · {e.zone ?? "—"}
                   </p>
                 </div>
                 <span className="shrink-0 text-xs text-muted-foreground">{formatDateTime(e.entryTime)}</span>

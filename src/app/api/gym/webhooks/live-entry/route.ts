@@ -19,8 +19,17 @@ import { prisma } from "@/lib/prisma";
  * events ("Entry FP Received" etc.) upstream of the "success" line. This
  * endpoint's schema has no field for any biometric payload — the Windows
  * watcher is responsible for reducing a log entry down to the plain access
- * result (memberNumber/entryTime/zone/device/allowed) before it ever
+ * result (cardNumber/entryTime/zone/device/allowed) before it ever
  * reaches here, and `.strict()` below rejects anything else it might send.
+ *
+ * The Ashbourne log line identifies a swipe by Card No, not Member No
+ * ("Adding 60734 event to interrupt queue - Card No 4163432") — Ashbourne
+ * allows the two to differ for a member, so the payload's identifier is
+ * `cardNumber` and matching below tries GymMember.ashbourneCardNumber
+ * before ever falling back to memberNumber. `memberNumber` is still
+ * accepted as a legacy alias (pre-cardNumber test payloads / anything
+ * still sending the old shape) but the production watcher sends
+ * cardNumber.
  *
  * This is a read-only entry log: it never creates a GymMember and never
  * touches GymMembership/GymMember status fields.
@@ -40,13 +49,17 @@ function isValidSecret(provided: string | null, expected: string | undefined): b
 
 const payloadSchema = z
   .object({
-    memberNumber: z.string().trim().min(1).max(50),
+    cardNumber: z.string().trim().min(1).max(50).optional(),
+    // Legacy alias — accepted so earlier test payloads keep working, but
+    // the real Windows watcher always sends cardNumber.
+    memberNumber: z.string().trim().min(1).max(50).optional(),
     entryTime: z.string().trim().min(1).max(40),
     zone: z.string().trim().min(1).max(100),
     device: z.string().trim().min(1).max(100),
     allowed: z.boolean(),
   })
-  .strict(); // rejects any field not listed above — including any fingerprint/biometric field
+  .strict() // rejects any field not listed above — including any fingerprint/biometric field
+  .refine((d) => !!(d.cardNumber || d.memberNumber), { message: "cardNumber is required" });
 
 // One structured line per request, at every exit point — safe fields only
 // (booleans, ids, zone/device labels): never the secret or any biometric
@@ -56,6 +69,15 @@ function logStage(fields: Record<string, string | boolean | number | null>) {
     .map(([k, v]) => `${k}=${v}`)
     .join(" ");
   console.log(`live_entry_webhook ${line}`);
+}
+
+/** Matching priority: exact Card No first (what the gate log actually
+ * reports), then Member No as a fallback for any card not yet linked in
+ * Ashbourne — never creates a member, so no match just means "unmatched". */
+async function matchMember(cardNumber: string) {
+  const byCard = await prisma.gymMember.findFirst({ where: { ashbourneCardNumber: cardNumber }, select: { id: true } });
+  if (byCard) return byCard;
+  return prisma.gymMember.findUnique({ where: { memberNumber: cardNumber }, select: { id: true } });
 }
 
 export async function POST(req: Request) {
@@ -84,6 +106,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid payload" }, { status: 400 });
   }
   const data = parsed.data;
+  const cardNumber = (data.cardNumber ?? data.memberNumber)!;
 
   // The bridge sends a bare local (UK) timestamp with no offset, e.g.
   // "2026-08-21T20:18:16" — Node's Date parser treats that as local time
@@ -107,24 +130,21 @@ export async function POST(req: Request) {
   const dryRun = new URL(req.url).searchParams.get("dryRun") === "1";
 
   try {
-    const member = await prisma.gymMember.findUnique({
-      where: { memberNumber: data.memberNumber },
-      select: { id: true },
-    });
+    const member = await matchMember(cardNumber);
 
     if (dryRun) {
       logStage({ received: true, authenticated: true, validation: true, dryRun: true, matched: !!member, created: false });
       return NextResponse.json({ ok: true, dryRun: true, matched: !!member });
     }
 
-    // The (memberNumber, device, entryTime) unique constraint is the dedup
-    // + idempotency key — a resend of the same log line hits it and is
+    // The (cardNumber, device, entryTime) unique constraint is the dedup +
+    // idempotency key — a resend of the same log line hits it and is
     // acknowledged as a duplicate instead of racing a separate read-then-
     // write check.
     try {
       const event = await prisma.gymLiveEntryEvent.create({
         data: {
-          memberNumber: data.memberNumber,
+          cardNumber,
           entryTime,
           zone: data.zone,
           device: data.device,

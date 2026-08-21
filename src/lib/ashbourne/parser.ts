@@ -10,6 +10,7 @@ import type { AshbourneMember } from "./types";
 
 const HEADER_ALIASES: Record<keyof AshbourneMember, RegExp> = {
   memberNo: /^member\s*no\.?$|^member\s*number$|^internal\s*id$/i,
+  cardNo: /^card\s*no\.?$|^card\s*number$/i,
   firstName: /^first\s*name$|^forename$/i,
   surname: /^surname$|^last\s*name$/i,
   email: /^e-?mail$/i,
@@ -65,6 +66,7 @@ export function rowsToMembers(rows: string[][], headers: string[]): AshbourneMem
 
     members.push({
       memberNo,
+      cardNo: cell(row, map, "cardNo"),
       firstName: cell(row, map, "firstName"),
       surname: cell(row, map, "surname"),
       email: cell(row, map, "email")?.toLowerCase(),

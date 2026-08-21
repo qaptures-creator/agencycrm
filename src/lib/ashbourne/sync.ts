@@ -19,6 +19,12 @@ import { AshbourneConnectorError } from "./types";
  * always refreshed on a match. email/phone are filled only if currently
  * empty — never overwritten. fullName/joinDate/notes/address and
  * everything else CRM-owned is left untouched on existing members.
+ *
+ * ashbourneCardNumber (Card No, added for live-entry matching — distinct
+ * from Member No) follows the same Ashbourne-owned rule but only when the
+ * report row actually has one: set/refreshed whenever record.cardNo is
+ * present, left as-is when a row is missing it rather than blanking out a
+ * previously-synced value.
  */
 
 export type SyncOutcome = {
@@ -141,6 +147,7 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
               phone: record.mobile ?? null,
               joinDate: record.clubInfoDate ?? new Date(),
               ashbourneMemberNo: record.memberNo,
+              ashbourneCardNumber: record.cardNo ?? null,
               ashbourneStatus: record.status ?? null,
               ashbourneMembershipType: record.membershipType ?? null,
               ashbourneExpiryDate: record.expiryDate ?? null,
@@ -155,11 +162,20 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
         const memberId = match.memberId;
         const existing = await prisma.gymMember.findUniqueOrThrow({
           where: { id: memberId },
-          select: { email: true, phone: true, ashbourneMemberNo: true, ashbourneStatus: true, ashbourneMembershipType: true, ashbourneExpiryDate: true },
+          select: {
+            email: true,
+            phone: true,
+            ashbourneMemberNo: true,
+            ashbourneCardNumber: true,
+            ashbourneStatus: true,
+            ashbourneMembershipType: true,
+            ashbourneExpiryDate: true,
+          },
         });
 
         const fieldsChanged =
           existing.ashbourneMemberNo !== record.memberNo ||
+          (!!record.cardNo && existing.ashbourneCardNumber !== record.cardNo) ||
           existing.ashbourneStatus !== (record.status ?? null) ||
           existing.ashbourneMembershipType !== (record.membershipType ?? null) ||
           (existing.ashbourneExpiryDate?.getTime() ?? null) !== (record.expiryDate?.getTime() ?? null) ||
@@ -184,6 +200,9 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
             ashbourneMembershipType: record.membershipType ?? null,
             ashbourneExpiryDate: record.expiryDate ?? null,
             ashbourneLastSyncedAt: new Date(),
+            // Refreshed only when this report row actually has a Card No —
+            // a row missing it doesn't blank out a previously-synced value.
+            ...(record.cardNo ? { ashbourneCardNumber: record.cardNo } : {}),
             // Fill-only — never overwrite an existing value.
             ...(!existing.email && record.email ? { email: record.email } : {}),
             ...(!existing.phone && record.mobile ? { phone: record.mobile } : {}),

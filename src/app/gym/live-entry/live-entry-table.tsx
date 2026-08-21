@@ -75,7 +75,7 @@ export function LiveEntryTable({
                   <TableCell className={e.memberName ? "font-medium" : "text-muted-foreground italic"}>
                     {e.memberName ?? "Unknown Member"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{e.memberNumber}</TableCell>
+                  <TableCell className="text-muted-foreground">{e.memberNumber ?? e.cardNumber}</TableCell>
                   <TableCell className="text-muted-foreground">{e.membershipType ?? "—"}</TableCell>
                   <TableCell>
                     {e.membershipStatus ? <GymStatusBadge list={MEMBERSHIP_STATUSES} value={e.membershipStatus} /> : "—"}
