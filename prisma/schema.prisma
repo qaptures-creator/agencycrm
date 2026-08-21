@@ -540,12 +540,13 @@ model GymMember {
   reviewRequired          Boolean   @default(false)
   reviewRequiredReason    String?
 
-  memberships GymMembership[]
-  memberNotes GymMemberNote[]
-  payments    GymPayment[]
-  leadsWon    GymLead[]         @relation("LeadConvertedMember")
-  enquiries   GymEnquiry[]      @relation("EnquiryConvertedMember")
-  emails      GymEmailMessage[]
+  memberships     GymMembership[]
+  memberNotes     GymMemberNote[]
+  payments        GymPayment[]
+  leadsWon        GymLead[]         @relation("LeadConvertedMember")
+  enquiries       GymEnquiry[]      @relation("EnquiryConvertedMember")
+  emails          GymEmailMessage[]
+  liveEntryEvents GymLiveEntryEvent[]
 
   @@index([email])
   @@index([phone])
@@ -1266,4 +1267,35 @@ model GymAshbourneSyncLog {
   reportUrl      String? // which Ashbourne report this run used — configurable per Phase 11
 
   @@index([startedAt])
+}
+
+/**
+ * Live gate-entry events from the Ashbourne biometric access log bridge
+ * (C:\Ashbourne\MVSv4\Log on the gym Windows PC — see
+ * src/app/api/gym/webhooks/live-entry/route.ts). Only the *result* of a
+ * successful access event is stored — never a fingerprint template,
+ * fingerprint image, or any other biometric payload; the Windows-side
+ * watcher is responsible for discarding that before it ever reaches this
+ * endpoint. Never touches GymMembership/GymMember status — this is a
+ * read-only entry log, not a membership signal.
+ */
+model GymLiveEntryEvent {
+  id         String   @id @default(cuid())
+  memberNumber String // raw value from the bridge, kept even if unmatched
+  entryTime  DateTime
+  zone       String?
+  device     String?
+  allowed    Boolean  @default(true)
+  source     String   @default("ASHBOURNE_LIVE_ENTRY")
+  createdAt  DateTime @default(now())
+
+  member   GymMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  memberId String?
+
+  // Dedup + idempotency key: the Windows bridge may resend the same log
+  // line (retry after a network blip, log file re-read); the same
+  // member/device/timestamp triple is treated as the same physical event.
+  @@unique([memberNumber, device, entryTime])
+  @@index([entryTime])
+  @@index([memberId])
 }

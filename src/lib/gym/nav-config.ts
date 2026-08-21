@@ -20,6 +20,7 @@ import {
   BarChart3,
   Plug,
   Settings,
+  DoorOpen,
   type LucideIcon,
 } from "lucide-react";
 import type { GymAccessRole } from "@/lib/gym/permissions";
@@ -34,6 +35,7 @@ export type GymNavItem = {
 export const GYM_NAV_ITEMS: GymNavItem[] = [
   { label: "Dashboard", href: "/gym", icon: LayoutDashboard },
   { label: "Members", href: "/gym/members", icon: Users, roles: ["OWNER", "MANAGER", "STAFF"] },
+  { label: "Live Entry", href: "/gym/live-entry", icon: DoorOpen },
   { label: "Memberships", href: "/gym/memberships", icon: IdCard, roles: ["OWNER", "MANAGER"] },
   { label: "Finances", href: "/gym/finances", icon: LineChart, roles: ["OWNER", "MANAGER"] },
   { label: "Payments", href: "/gym/payments", icon: CreditCard, roles: ["OWNER", "MANAGER"] },

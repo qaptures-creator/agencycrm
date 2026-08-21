@@ -28,7 +28,9 @@ import {
 } from "@/lib/gym/dashboard-data";
 import { getAshbourneDiagnosticEnvSummary } from "@/lib/ashbourne/config";
 import { getLatestAshbourneSyncLog } from "@/lib/ashbourne/sync";
+import { getTodayLiveEntryStats } from "@/lib/gym/live-entry-data";
 import { AshbourneSyncPanel } from "@/app/gym/integrations/ashbourne-sync-panel";
+import { LiveEntryWidget } from "@/components/gym/dashboard/live-entry-widget";
 import { Landmark } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -53,16 +55,18 @@ export default async function GymDashboardPage() {
   const showFinance = can(role, "viewFinance");
   const showAshbourne = can(role, "manageIntegrations");
 
-  const [kpis, todayStaff, todayTasks, recentEnquiries, membershipSnapshot, alerts, revenue, ashbourneLastLogRaw] = await Promise.all([
-    getDashboardKpis(),
-    getTodayStaff(),
-    getTodayTasks(),
-    getRecentEnquiries(),
-    getMembershipSnapshot(),
-    getAlerts(),
-    showFinance ? getRevenueSnapshot() : Promise.resolve(null),
-    showAshbourne ? getLatestAshbourneSyncLog() : Promise.resolve(null),
-  ]);
+  const [kpis, todayStaff, todayTasks, recentEnquiries, membershipSnapshot, alerts, revenue, ashbourneLastLogRaw, liveEntryTodayStats] =
+    await Promise.all([
+      getDashboardKpis(),
+      getTodayStaff(),
+      getTodayTasks(),
+      getRecentEnquiries(),
+      getMembershipSnapshot(),
+      getAlerts(),
+      showFinance ? getRevenueSnapshot() : Promise.resolve(null),
+      showAshbourne ? getLatestAshbourneSyncLog() : Promise.resolve(null),
+      getTodayLiveEntryStats(),
+    ]);
 
   const ashbourneEnvSummary = showAshbourne ? getAshbourneDiagnosticEnvSummary() : null;
   const ashbourneLastLog = ashbourneLastLogRaw
@@ -278,6 +282,8 @@ export default async function GymDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <LiveEntryWidget initialTodayStats={liveEntryTodayStats} />
 
       {/* Revenue snapshot */}
       {showFinance && (
