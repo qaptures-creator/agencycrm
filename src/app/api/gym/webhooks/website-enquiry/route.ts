@@ -149,18 +149,32 @@ async function findExistingMatch(email: string | undefined, phone: string | unde
   return { member, lead };
 }
 
+// One structured line per request, at every exit point — safe fields only
+// (booleans, an id, a category string): never the secret, cookies, message
+// body, or raw email/phone. This is the primary diagnostic trail for this
+// route; grep Railway deploy logs for "website_enquiry_webhook".
+function logStage(fields: Record<string, string | boolean | number | null>) {
+  const line = Object.entries(fields)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(" ");
+  console.log(`website_enquiry_webhook ${line}`);
+}
+
 export async function POST(req: Request) {
   const expectedSecret = process.env.WEBSITE_ENQUIRY_WEBHOOK_SECRET;
   if (!expectedSecret) {
+    logStage({ received: true, authenticated: false, reason: "not_configured" });
     return NextResponse.json({ error: "not configured" }, { status: 503 });
   }
 
   if (!isValidSecret(req.headers.get(SECRET_HEADER), expectedSecret)) {
+    logStage({ received: true, authenticated: false });
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const rateLimitKey = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if (isRateLimited(rateLimitKey)) {
+    logStage({ received: true, authenticated: true, reason: "rate_limited" });
     return NextResponse.json({ error: "too many requests" }, { status: 429 });
   }
 
@@ -168,17 +182,20 @@ export async function POST(req: Request) {
   try {
     raw = await req.json();
   } catch {
+    logStage({ received: true, authenticated: true, validation: false, reason: "invalid_json" });
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
 
   const parsed = payloadSchema.safeParse(raw);
   if (!parsed.success) {
+    logStage({ received: true, authenticated: true, validation: false, reason: "schema" });
     return NextResponse.json({ error: "invalid payload" }, { status: 400 });
   }
   const data = parsed.data;
 
   const name = sanitizeText(data.name, 200);
   if (!name) {
+    logStage({ received: true, authenticated: true, validation: false, reason: "empty_name" });
     return NextResponse.json({ error: "invalid payload" }, { status: 400 });
   }
 
@@ -204,6 +221,7 @@ export async function POST(req: Request) {
     const { member, lead } = await findExistingMatch(email, phone);
 
     if (dryRun) {
+      logStage({ received: true, authenticated: true, validation: true, dryRun: true, created: false });
       return NextResponse.json({ ok: true, dryRun: true });
     }
 
@@ -236,8 +254,10 @@ export async function POST(req: Request) {
       metadata: { category, matchedMemberId: member?.id ?? null, matchedLeadId: lead?.id ?? null },
     });
 
+    logStage({ received: true, authenticated: true, validation: true, dryRun: false, created: true, enquiryId: enquiry.id });
     return NextResponse.json({ ok: true });
   } catch (err) {
+    logStage({ received: true, authenticated: true, validation: true, dryRun, created: false, reason: "exception" });
     console.error("website-enquiry webhook processing failed:", err instanceof Error ? err.message : "unknown error");
     return NextResponse.json({ error: "processing failed" }, { status: 500 });
   }
