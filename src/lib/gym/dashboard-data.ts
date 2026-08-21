@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek } from "date-fns";
+import { getActiveMembershipCount, getNewMembershipsThisMonth, getDayPassesThisMonth } from "./membership-kpis";
 
 const MONTHLY_MULTIPLIER: Record<string, number> = { WEEKLY: 52 / 12, MONTHLY: 1, ANNUAL: 1 / 12 };
 
@@ -18,6 +19,7 @@ export async function getDashboardKpis() {
   const [
     activeMembers,
     newMembersThisMonth,
+    dayPassesThisMonth,
     cancellationsThisMonth,
     activeMemberships,
     outstandingCount,
@@ -26,8 +28,9 @@ export async function getDashboardKpis() {
     staffCurrentlyWorking,
     tasksDueToday,
   ] = await Promise.all([
-    prisma.gymMember.count({ where: { memberships: { some: { status: "ACTIVE" } } } }),
-    prisma.gymMember.count({ where: { joinDate: { gte: monthStart, lte: monthEnd } } }),
+    getActiveMembershipCount(),
+    getNewMembershipsThisMonth(now),
+    getDayPassesThisMonth(now),
     prisma.gymMembership.count({ where: { status: "CANCELLED", cancelledAt: { gte: monthStart, lte: monthEnd } } }),
     prisma.gymMembership.findMany({ where: { status: "ACTIVE" }, select: { billingAmount: true, paymentFrequency: true } }),
     prisma.gymMembership.count({ where: { paymentStatus: { in: ["OVERDUE", "FAILED"] } } }),
@@ -49,6 +52,7 @@ export async function getDashboardKpis() {
   return {
     activeMembers,
     newMembersThisMonth,
+    dayPassesThisMonth,
     cancellationsThisMonth,
     monthlyMembershipRevenue,
     outstandingCount,
@@ -148,9 +152,14 @@ export async function getMembershipSnapshot() {
   const now = new Date();
   const monthStart = startOfMonth(now);
 
+  // totalActive/newJoins reuse the exact same helpers as the top-level
+  // dashboard cards (getActiveMembershipCount/getNewMembershipsThisMonth)
+  // so there's a single definition of each, never two that can drift.
+  // cancellations/frozen/expired/overdue are unchanged — still membership-
+  // row counts across all plan types, out of scope for this pass.
   const [totalActive, newJoins, cancellations, frozen, expired, overdue] = await Promise.all([
-    prisma.gymMembership.count({ where: { status: "ACTIVE" } }),
-    prisma.gymMembership.count({ where: { startDate: { gte: monthStart } } }),
+    getActiveMembershipCount(),
+    getNewMembershipsThisMonth(now),
     prisma.gymMembership.count({ where: { status: "CANCELLED", cancelledAt: { gte: monthStart } } }),
     prisma.gymMembership.count({ where: { status: "FROZEN" } }),
     prisma.gymMembership.count({ where: { status: "EXPIRED" } }),

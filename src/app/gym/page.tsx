@@ -13,6 +13,7 @@ import {
   TrendingDown,
   BadgeAlert,
   Clock,
+  Ticket,
 } from "lucide-react";
 import { requireGymUser } from "@/lib/gym/auth";
 import { can, roleLabel, type GymAccessRole } from "@/lib/gym/permissions";
@@ -121,6 +122,7 @@ export default async function GymDashboardPage() {
             tone={kpis.outstandingCount > 0 ? "destructive" : "default"}
           />
         )}
+        <StatCard label="Day Passes This Month" value={kpis.dayPassesThisMonth} icon={Ticket} />
         <StatCard label="New Enquiries" value={kpis.newEnquiries} icon={Inbox} />
         <StatCard label="Leads Awaiting Follow-Up" value={kpis.leadsAwaitingFollowUp} icon={Target} tone={kpis.leadsAwaitingFollowUp > 0 ? "warning" : "default"} />
         <StatCard label="Staff Currently Working" value={kpis.staffCurrentlyWorking} icon={UsersRound} tone="success" />
