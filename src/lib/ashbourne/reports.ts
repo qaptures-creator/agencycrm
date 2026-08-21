@@ -39,11 +39,23 @@ import { rowsToMembers } from "./parser";
  * zero-record sync, since Ashbourne is expected to always have current
  * members.
  *
+ * Pagination (confirmed against the real site, 2026-08-21 diagnostic
+ * probe): the grid's last <tr> is a pager row with numbered links (an ASP.NET
+ * GridView postback pager, e.g. page "164 found" / 20 per page = 9 pages).
+ * A prior version of this connector only ever read page 1 — proven by that
+ * probe to return the *oldest* 20 records in the active range, not the
+ * newest, since Ashbourne apparently returns them oldest-first. That's why
+ * recently-joined members were missing even though the report's total count
+ * already covered them. Every page's numbered link is clicked in turn until
+ * no link for the next page number exists.
+ *
  * Not yet implemented: setting a custom date range before "Apply" (this
- * accepts whatever range the report already has active) and pagination
- * beyond the first results page. Per the plan, page 1 needs to be proven
- * working before either of those is tackled.
+ * accepts whatever range the report already has active — the diagnostic
+ * probe confirmed the active range's total already includes recent joins,
+ * so this hasn't been needed yet).
  */
+
+const MAX_GRID_PAGES = 200; // safety cap against an unexpected infinite pagination loop
 
 async function withDebugScreenshot(page: Page, step: string, message: string): Promise<AshbourneConnectorError> {
   const debug = await captureDebugScreenshot(page);
@@ -125,12 +137,28 @@ export async function fetchAshbourneMembers(page: Page, cfg: AshbourneConfig): P
   const headerCells = await gridLocator.locator("tr").first().locator("th, td").allTextContents();
   const headers = headerCells.map((h) => h.trim());
 
-  const rowLocator = gridLocator.locator("tr.gridCell");
-  const rowCount = await rowLocator.count();
   const allRows: string[][] = [];
-  for (let i = 0; i < rowCount; i++) {
-    const cells = await rowLocator.nth(i).locator("td").allTextContents();
-    if (cells.length > 0) allRows.push(cells.map((c) => c.trim()));
+  let pageNum = 1;
+  while (pageNum <= MAX_GRID_PAGES) {
+    const rowLocator = gridLocator.locator("tr.gridCell");
+    const rowCount = await rowLocator.count();
+    for (let i = 0; i < rowCount; i++) {
+      const cells = await rowLocator.nth(i).locator("td").allTextContents();
+      if (cells.length > 0) allRows.push(cells.map((c) => c.trim()));
+    }
+
+    // The pager is the grid's last row — an ASP.NET GridView postback
+    // pager with a plain-text (non-link) current page and numbered links
+    // for every other page. Stop once there's no link for the next number.
+    const pagerRow = gridLocator.locator("tr").last();
+    const nextPageLink = pagerRow.getByRole("link", { name: String(pageNum + 1), exact: true }).first();
+    const hasNextPage = await nextPageLink.isVisible().catch(() => false);
+    if (!hasNextPage) break;
+
+    await nextPageLink.click();
+    await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    pageNum++;
   }
 
   const members = rowsToMembers(allRows, headers);
@@ -143,7 +171,7 @@ export async function fetchAshbourneMembers(page: Page, cfg: AshbourneConfig): P
     throw await withDebugScreenshot(
       page,
       "zero-records-retrieved",
-      `Reached the results page (${page.url()}) but the grid returned 0 member rows (${rowCount} grid rows found, ${headers.length} columns). Treating this as a failure rather than a valid empty sync.`
+      `Reached the results page (${page.url()}) but the grid returned 0 member rows across ${pageNum} page(s) (${headers.length} columns). Treating this as a failure rather than a valid empty sync.`
     );
   }
 
