@@ -328,8 +328,23 @@ model GymUser {
   resetTokens            GymPasswordResetToken[]
   cleaningTasksCreated   GymCleaningTask[]         @relation("CleaningTaskCreatedBy")
   cleaningTasksCompleted GymCleaningTask[]         @relation("CleaningTaskCompletedBy")
+  navBadgesSeen          GymNavBadgeSeen[]
 
   @@index([accessRole])
+}
+
+/** Per-user "I've looked at this section" marker for the sidebar nav
+ * badges — visiting a section clears its badge until something new
+ * happens there. One row per (user, section). */
+model GymNavBadgeSeen {
+  id     String   @id @default(cuid())
+  section String  // "/gym/members" | "/gym/shake-bar" | "/gym/enquiries"
+  seenAt DateTime @default(now())
+
+  user   GymUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@unique([userId, section])
 }
 
 model GymSession {

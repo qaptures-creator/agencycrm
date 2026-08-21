@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Muscle Massacre" };
 export default async function GymLayout({ children }: { children: React.ReactNode }) {
   const user = await requireGymUser("/gym");
   const displayUser = { name: user.name, accessRole: user.accessRole, position: user.staff?.position };
-  const badges = await getNavBadgeCounts();
+  const badges = await getNavBadgeCounts(user.id);
 
   return (
     <div className="gym-theme gym-grain flex h-screen overflow-hidden bg-background text-foreground">
