@@ -155,9 +155,20 @@ export async function fetchAshbourneMembers(page: Page, cfg: AshbourneConfig): P
     const hasNextPage = await nextPageLink.isVisible().catch(() => false);
     if (!hasNextPage) break;
 
+    // This is an ASP.NET UpdatePanel-style partial postback — the URL never
+    // changes, so waitForLoadState("networkidle") has no reliable signal to
+    // key off and just burns its full timeout on every page turn if the
+    // site has any background polling. Instead, watch the grid's first
+    // data cell for its text to actually change, which is fast (usually
+    // well under a second) and doesn't depend on network-level heuristics.
+    const firstCellBefore = await rowLocator.first().locator("td").first().innerText().catch(() => "");
     await nextPageLink.click();
-    await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
-    await page.waitForTimeout(300);
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      const firstCellNow = await gridLocator.locator("tr.gridCell").first().locator("td").first().innerText().catch(() => "");
+      if (firstCellNow && firstCellNow !== firstCellBefore) break;
+      await page.waitForTimeout(150);
+    }
     pageNum++;
   }
 
