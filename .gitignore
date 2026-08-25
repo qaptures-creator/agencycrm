@@ -11,7 +11,8 @@ tsconfig.tsbuildinfo
 
 # agent tooling caches (auto-generated, not project code)
 .agents/
-.claude/
+.claude/*
+!.claude/settings.json
 .windsurf/
 skills-lock.json
 AGENTS.md
