@@ -15,7 +15,7 @@ import {
   Clock,
   Ticket,
 } from "lucide-react";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, roleLabel, type GymAccessRole } from "@/lib/gym/permissions";
 import {
   getDashboardKpis,
@@ -50,7 +50,7 @@ function moneyGBP(v: number) {
 }
 
 export default async function GymDashboardPage() {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym");
   const role = user.accessRole as GymAccessRole;
   const showFinance = can(role, "viewFinance");
   const showAshbourne = can(role, "manageIntegrations");

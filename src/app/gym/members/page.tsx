@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { markNavSectionSeen } from "@/lib/gym/nav-badges";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -7,7 +7,7 @@ import { MemberList, type MemberRow } from "./member-list";
 import { MemberMapView } from "./member-map-view";
 
 export default async function MembersPage() {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/members");
   const canImport = can(user.accessRole as GymAccessRole, "manageMemberships");
   markNavSectionSeen(user.id, "/gym/members");
 

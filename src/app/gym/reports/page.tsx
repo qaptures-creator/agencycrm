@@ -1,4 +1,4 @@
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import {
   resolveDateRange,
@@ -20,7 +20,7 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/reports");
   const showFinance = can(user.accessRole as GymAccessRole, "viewFinance");
   const { range: rangeParam, from: fromParam, to: toParam } = await searchParams;
 

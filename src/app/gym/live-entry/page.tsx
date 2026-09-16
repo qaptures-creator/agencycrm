@@ -1,9 +1,9 @@
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { getRecentLiveEntries, getTodayLiveEntryStats } from "@/lib/gym/live-entry-data";
 import { LiveEntryTable } from "./live-entry-table";
 
 export default async function LiveEntryPage() {
-  await requireGymUser();
+  await requireTabAccess("/gym/live-entry");
 
   const [entries, todayStats] = await Promise.all([getRecentLiveEntries(100), getTodayLiveEntryStats()]);
 

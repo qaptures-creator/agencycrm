@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { Inbox, ListChecks, ArrowRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AnnouncementFeed } from "./announcement-feed";
 import { startOfWeek } from "date-fns";
 
 export default async function CommunicationsPage() {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/communications");
   const canManage = can(user.accessRole as GymAccessRole, "manageStaff");
 
   const [announcements, newEnquiriesThisWeek, overdueTasks] = await Promise.all([

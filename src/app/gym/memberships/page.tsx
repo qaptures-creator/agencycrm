@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { isAshbourneConnected } from "@/lib/gym/integrations/ashbourne-provider";
 import { PlanList, type PlanRow } from "./plan-list";
 import { CsvTools, type ExportMemberRow } from "./csv-tools";
 
 export default async function MembershipsPage() {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/memberships");
   const canManage = can(user.accessRole as GymAccessRole, "manageMemberships");
 
   const [plans, activeCounts, ashbourneConnected, membersRaw] = await Promise.all([

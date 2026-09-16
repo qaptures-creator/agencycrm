@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { startOfWeek, endOfWeek, addDays, format } from "date-fns";
 import { RotaBoard } from "./rota-board";
@@ -7,7 +7,7 @@ import { ClockInOutCard } from "@/components/gym/clock-in-out-card";
 import { getOwnAttendanceStatus } from "@/actions/gym/attendance";
 
 export default async function RotaPage({ searchParams }: { searchParams: Promise<{ week?: string; new?: string }> }) {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/rota");
   const canManage = can(user.accessRole as GymAccessRole, "manageRota");
   const { week } = await searchParams;
 

@@ -8,9 +8,11 @@ import type { NavBadgeCounts } from "@/lib/gym/nav-badges";
 
 export async function GymTopbar({
   user,
+  allowedHrefs,
   badges,
 }: {
   user: { id: string; name: string; accessRole: string };
+  allowedHrefs: string[];
   badges: NavBadgeCounts;
 }) {
   const notificationRows = await prisma.gymNotification.findMany({
@@ -31,7 +33,7 @@ export async function GymTopbar({
 
   return (
     <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur sm:px-6">
-      <MobileMenuButton user={user} badges={badges} />
+      <MobileMenuButton user={user} allowedHrefs={allowedHrefs} badges={badges} />
       <div className="min-w-0 flex-1">
         <GymGlobalSearch />
       </div>

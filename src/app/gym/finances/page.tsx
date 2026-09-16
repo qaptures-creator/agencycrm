@@ -1,5 +1,5 @@
 import { Wallet, CalendarDays, TrendingUp, AlertTriangle, XCircle, UserPlus, UserMinus, BarChart3 } from "lucide-react";
-import { requirePermission } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { isAshbourneConnected } from "@/lib/gym/integrations/ashbourne-provider";
 import {
   resolveDateRange,
@@ -33,7 +33,7 @@ export default async function FinancesPage({
 }: {
   searchParams: Promise<{ range?: string; start?: string; end?: string }>;
 }) {
-  await requirePermission("viewFinance");
+  await requireTabAccess("/gym/finances");
   const { range: rangeParam, start, end } = await searchParams;
   const range: DateRangeKey = VALID_RANGES.includes(rangeParam as DateRangeKey) ? (rangeParam as DateRangeKey) : "month";
   const resolvedRange = resolveDateRange(range, start, end);

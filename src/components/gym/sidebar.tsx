@@ -5,8 +5,8 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronsLeft, ChevronsRight, LogOut, X } from "lucide-react";
-import { navItemsForRole } from "@/lib/gym/nav-config";
-import { roleLabel, type GymAccessRole } from "@/lib/gym/permissions";
+import { navItemsForAllowedHrefs } from "@/lib/gym/nav-config";
+import { roleLabel } from "@/lib/gym/permissions";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/actions/gym/auth";
 import { initials } from "@/lib/utils";
@@ -23,18 +23,18 @@ function NavBadge({ count, collapsed }: { count: number; collapsed?: boolean }) 
 }
 
 function NavLinks({
-  role,
+  allowedHrefs,
   collapsed,
   onNavigate,
   badges,
 }: {
-  role: GymAccessRole;
+  allowedHrefs: string[];
   collapsed?: boolean;
   onNavigate?: () => void;
   badges?: NavBadgeCounts;
 }) {
   const pathname = usePathname();
-  const items = navItemsForRole(role);
+  const items = navItemsForAllowedHrefs(allowedHrefs);
 
   return (
     <nav className="flex flex-1 flex-col gap-0.5 px-2.5">
@@ -123,7 +123,7 @@ function UserFooter({ user, collapsed }: { user: CurrentUser; collapsed?: boolea
   );
 }
 
-export function GymSidebar({ user, badges }: { user: CurrentUser; badges?: NavBadgeCounts }) {
+export function GymSidebar({ user, allowedHrefs, badges }: { user: CurrentUser; allowedHrefs: string[]; badges?: NavBadgeCounts }) {
   const [collapsed, setCollapsed] = React.useState(false);
 
   React.useEffect(() => {
@@ -147,7 +147,7 @@ export function GymSidebar({ user, badges }: { user: CurrentUser; badges?: NavBa
     >
       <Brand collapsed={collapsed} />
       <div className="flex-1 overflow-y-auto scrollbar-thin py-2">
-        <NavLinks role={user.accessRole as GymAccessRole} collapsed={collapsed} badges={badges} />
+        <NavLinks allowedHrefs={allowedHrefs} collapsed={collapsed} badges={badges} />
       </div>
       <UserFooter user={user} collapsed={collapsed} />
       <button
@@ -164,11 +164,13 @@ export function GymMobileSidebar({
   open,
   onClose,
   user,
+  allowedHrefs,
   badges,
 }: {
   open: boolean;
   onClose: () => void;
   user: CurrentUser;
+  allowedHrefs: string[];
   badges?: NavBadgeCounts;
 }) {
   // Lock background scroll while the drawer is open, and let Escape close it.
@@ -216,7 +218,7 @@ export function GymMobileSidebar({
           </button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-thin py-2">
-          <NavLinks role={user.accessRole as GymAccessRole} onNavigate={onClose} badges={badges} />
+          <NavLinks allowedHrefs={allowedHrefs} onNavigate={onClose} badges={badges} />
         </div>
         <div className="pb-[env(safe-area-inset-bottom)]">
           <UserFooter user={user} />

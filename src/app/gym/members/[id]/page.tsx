@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CreditCard, Inbox, Target } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { PersonAvatar } from "@/components/ui/avatar";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -28,7 +28,7 @@ function moneyGBP(v: number) {
 
 export default async function MemberDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/members");
   const canManage = can(user.accessRole as GymAccessRole, "manageMemberships");
 
   const [member, plans] = await Promise.all([

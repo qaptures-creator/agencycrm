@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { isEmailIntegrationConnected } from "@/lib/gym/integrations/email-provider";
 import { markNavSectionSeen } from "@/lib/gym/nav-badges";
 import { EnquiryInbox } from "./enquiry-inbox";
 import type { EnquiryDetail } from "./enquiry-detail-sheet";
 
 export default async function EnquiriesPage({ searchParams }: { searchParams: Promise<{ enquiry?: string; new?: string }> }) {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/enquiries");
   markNavSectionSeen(user.id, "/gym/enquiries");
   const { enquiry: selectedId } = await searchParams;
 

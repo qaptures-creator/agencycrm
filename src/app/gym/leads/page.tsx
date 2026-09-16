@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { LeadsView } from "./leads-view";
 import type { LeadDetail } from "./lead-detail-sheet";
 
 export default async function LeadsPage({ searchParams }: { searchParams: Promise<{ lead?: string; new?: string }> }) {
-  await requireGymUser();
+  await requireTabAccess("/gym/leads");
   const { lead: selectedId } = await searchParams;
 
   const [leadsRaw, staff, total, joined, selectedRaw] = await Promise.all([

@@ -6,8 +6,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GymDetailsForm } from "./gym-details-form";
 import { AuditLogPanel } from "./audit-log-panel";
+import { RolePermissionsEditor } from "./role-permissions-editor";
 import { STAFF_POSITIONS, TASK_CATEGORIES } from "@/lib/gym/constants";
-import { ACCESS_ROLES } from "@/lib/gym/permissions";
+import type { RolePermissionsUpdate } from "@/actions/gym/role-permissions";
 
 type SettingsLike = { gymName: string; address: string | null; phone: string | null; email: string; website: string | null };
 type AuditRow = {
@@ -25,12 +26,14 @@ export function SettingsTabs({
   isOwner,
   initialAuditRows,
   initialAuditHasMore,
+  rolePermissions,
 }: {
   settings: SettingsLike;
   canEdit: boolean;
   isOwner: boolean;
   initialAuditRows: AuditRow[];
   initialAuditHasMore: boolean;
+  rolePermissions: RolePermissionsUpdate[];
 }) {
   return (
     <Tabs defaultValue="details">
@@ -76,32 +79,33 @@ export function SettingsTabs({
       </TabsContent>
 
       <TabsContent value="roles">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold">Staff Positions &amp; Access Roles</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Staff Positions</p>
+        <div className="space-y-5">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold">Staff Positions</CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="flex flex-wrap gap-1.5">
                 {STAFF_POSITIONS.map((p) => (
                   <Badge key={p} variant="outline">{p}</Badge>
                 ))}
               </div>
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Access Roles</p>
-              <div className="flex flex-wrap gap-1.5">
-                {ACCESS_ROLES.map((r) => (
-                  <Badge key={r.value} variant="outline">{r.label}</Badge>
-                ))}
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              These are fixed in this version of the product and aren&apos;t yet user-customisable.
-            </p>
-          </CardContent>
-        </Card>
+              <p className="mt-2 text-xs text-muted-foreground">Fixed for now, not yet user-customisable.</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold">Access Role Permissions</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Which sidebar sections each access role can see and open. The Owner always has full access and isn&apos;t shown here.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <RolePermissionsEditor rolePermissions={rolePermissions} isOwner={isOwner} />
+            </CardContent>
+          </Card>
+        </div>
       </TabsContent>
 
       <TabsContent value="tasks">

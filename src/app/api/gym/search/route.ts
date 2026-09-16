@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentGymUser } from "@/lib/gym/auth";
-import { navItemsForRole } from "@/lib/gym/nav-config";
-import type { GymAccessRole } from "@/lib/gym/permissions";
+import { getAllowedTabHrefs } from "@/lib/gym/role-permissions";
 
 export type GymSearchResult = {
   id: string;
@@ -19,7 +18,7 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
   if (q.length < 2) return NextResponse.json({ results: [] });
 
-  const allowed = new Set(navItemsForRole(user.accessRole as GymAccessRole).map((i) => i.href));
+  const allowed = new Set(await getAllowedTabHrefs(user.accessRole));
   const insensitive = { contains: q, mode: "insensitive" as const };
 
   const [members, enquiries, leads, staff, equipment, tasks] = await Promise.all([

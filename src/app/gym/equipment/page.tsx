@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { EquipmentList } from "./equipment-list";
 
 export default async function EquipmentPage() {
-  await requireGymUser();
+  await requireTabAccess("/gym/equipment");
 
   const equipment = await prisma.gymEquipment.findMany({
     orderBy: [{ name: "asc" }],

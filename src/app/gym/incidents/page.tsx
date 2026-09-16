@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { IncidentList } from "./incident-list";
 
 export default async function IncidentsPage() {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/incidents");
   const canViewAll = can(user.accessRole as GymAccessRole, "viewAllIncidents");
 
   const incidents = await prisma.gymIncident.findMany({

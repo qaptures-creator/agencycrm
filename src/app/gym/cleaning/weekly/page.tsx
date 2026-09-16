@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { startOfWeek, endOfWeek, addDays, format } from "date-fns";
 import { ChevronLeft, ChevronRight, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ function summarizeCell(statuses: string[]) {
 }
 
 export default async function CleaningWeeklyPage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
-  await requireGymUser();
+  await requireTabAccess("/gym/cleaning");
   const { week } = await searchParams;
 
   const anchor = week ? new Date(week + "T00:00:00") : new Date();

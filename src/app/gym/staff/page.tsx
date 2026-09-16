@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { StaffList } from "./staff-list";
 
 export default async function StaffPage() {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/staff");
   const canManage = can(user.accessRole as GymAccessRole, "manageStaff");
 
   const staff = await prisma.gymStaff.findMany({

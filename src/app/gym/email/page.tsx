@@ -1,4 +1,4 @@
-import { requirePermission } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { getFolderCounts, getMessageList } from "@/lib/gym/email-data";
 import { EmailClient } from "./email-client";
 import type { WellKnownFolder } from "@/lib/email/types";
@@ -10,7 +10,7 @@ export default async function EmailPage({
 }: {
   searchParams: Promise<{ folder?: string; message?: string; unread?: string }>;
 }) {
-  await requirePermission("viewEmail");
+  await requireTabAccess("/gym/email");
   const { folder: folderParam, message: messageId, unread } = await searchParams;
   const folder: WellKnownFolder = (VALID_FOLDERS as readonly string[]).includes(folderParam ?? "")
     ? (folderParam as WellKnownFolder)

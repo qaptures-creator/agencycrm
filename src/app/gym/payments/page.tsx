@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { requirePermission } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { isAshbourneConnected } from "@/lib/gym/integrations/ashbourne-provider";
 import { PaymentList, type PaymentRow } from "./payment-list";
 
 export default async function PaymentsPage() {
-  await requirePermission("viewFinance");
+  await requireTabAccess("/gym/payments");
 
   const [paymentsRaw, members, ashbourneConnected] = await Promise.all([
     prisma.gymPayment.findMany({

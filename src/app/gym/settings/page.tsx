@@ -1,13 +1,14 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
+import { getRolePermissionsMatrix } from "@/lib/gym/role-permissions";
 import { SettingsTabs } from "./settings-tabs";
 
 export default async function SettingsPage() {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/settings");
   const canEdit = user.accessRole === "OWNER" || user.accessRole === "MANAGER";
   const isOwner = user.accessRole === "OWNER";
 
-  const [settingsRow, auditRows] = await Promise.all([
+  const [settingsRow, auditRows, rolePermissions] = await Promise.all([
     prisma.gymSettings.findUnique({ where: { id: "singleton" } }),
     isOwner
       ? prisma.gymAuditLog.findMany({
@@ -16,6 +17,7 @@ export default async function SettingsPage() {
           take: 50,
         })
       : Promise.resolve([]),
+    getRolePermissionsMatrix(),
   ]);
 
   const settings = settingsRow ?? {
@@ -39,6 +41,7 @@ export default async function SettingsPage() {
         isOwner={isOwner}
         initialAuditRows={auditRows}
         initialAuditHasMore={auditRows.length === 50}
+        rolePermissions={rolePermissions}
       />
     </div>
   );

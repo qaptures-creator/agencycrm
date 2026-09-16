@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { format } from "date-fns";
 import { CleaningDashboard } from "./cleaning-dashboard";
 
 export default async function CleaningPage({ searchParams }: { searchParams: Promise<{ date?: string; new?: string }> }) {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/cleaning");
   const canManage = can(user.accessRole as GymAccessRole, "manageTasks");
   const { date } = await searchParams;
 

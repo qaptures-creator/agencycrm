@@ -4,6 +4,7 @@
 import { PrismaClient } from "@prisma/client";
 import { DEFAULT_PIPELINE_STAGES, DEFAULT_DELIVERABLE_STATUSES } from "../src/lib/constants";
 import { DEFAULT_CLEANING_ZONES } from "../src/lib/gym/constants";
+import { DEFAULT_ROLE_PERMISSIONS, EDITABLE_ROLES } from "../src/lib/gym/role-permissions-defaults";
 import { hashPassword } from "../src/lib/gym/password";
 import { seedGymDemoData } from "./seed-gym-demo";
 
@@ -67,6 +68,18 @@ async function main() {
     await prisma.gymIntegration.upsert({
       where: { provider },
       create: { provider, status: "NOT_CONNECTED" },
+      update: {},
+    });
+  }
+
+  // Create-if-missing only — never overwrites an Owner's saved edits to the
+  // Staff Roles matrix. Defaults reproduce exactly what each role could see
+  // before this table existed, so switching this feature on doesn't change
+  // anyone's access until an Owner actually edits it.
+  for (const role of EDITABLE_ROLES) {
+    await prisma.gymRolePermission.upsert({
+      where: { role },
+      create: { role, allowedTabs: DEFAULT_ROLE_PERMISSIONS[role] },
       update: {},
     });
   }

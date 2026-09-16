@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requirePermission } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContentCalendar } from "./content-calendar";
@@ -7,7 +7,7 @@ import { CampaignTracker } from "./campaign-tracker";
 import { LeadsBySource } from "./leads-by-source";
 
 export default async function MarketingPage() {
-  const user = await requirePermission("viewMarketing");
+  const user = await requireTabAccess("/gym/marketing");
   const canManage = can(user.accessRole as GymAccessRole, "manageMarketing");
 
   const [content, staff, campaigns, leadsBySource] = await Promise.all([

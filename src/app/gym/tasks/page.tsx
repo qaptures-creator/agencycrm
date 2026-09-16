@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { getTasksWithRollover } from "@/lib/gym/tasks-data";
 import { TaskBoard } from "./task-board";
 
 export default async function TasksPage() {
-  await requireGymUser();
+  await requireTabAccess("/gym/tasks");
 
   const [tasks, staff] = await Promise.all([
     getTasksWithRollover(),

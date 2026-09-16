@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { markNavSectionSeen } from "@/lib/gym/nav-badges";
 import { getGoodtillSyncStatus } from "@/lib/gym/integrations/goodtill-sync";
 import {
@@ -26,7 +26,7 @@ export default async function ShakeBarPage({
 }: {
   searchParams: Promise<{ posRange?: string; posFrom?: string; posTo?: string }>;
 }) {
-  const user = await requireGymUser();
+  const user = await requireTabAccess("/gym/shake-bar");
   markNavSectionSeen(user.id, "/gym/shake-bar");
 
   const { posRange, posFrom, posTo } = await searchParams;

@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { requireGymUser } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { MaintenanceBoard } from "./maintenance-board";
 
 export default async function MaintenancePage() {
-  await requireGymUser();
+  await requireTabAccess("/gym/maintenance");
 
   const [tickets, staff, equipment] = await Promise.all([
     prisma.gymMaintenanceTicket.findMany({

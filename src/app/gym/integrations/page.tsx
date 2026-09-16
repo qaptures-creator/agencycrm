@@ -1,6 +1,6 @@
 import { Mail, Landmark, Globe, Calendar, Share2, Webhook, type LucideIcon } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { requirePermission } from "@/lib/gym/auth";
+import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,7 @@ const DESCRIPTIONS: Record<string, string> = {
 };
 
 export default async function IntegrationsPage() {
-  const user = await requirePermission("manageIntegrations");
+  const user = await requireTabAccess("/gym/integrations");
   const canManageEmail = can(user.accessRole as GymAccessRole, "manageEmail");
   const emailEnvSummary = getEmailDiagnosticEnvSummary();
   const ashbourneEnvSummary = getAshbourneDiagnosticEnvSummary();

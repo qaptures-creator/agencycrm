@@ -347,6 +347,22 @@ model GymNavBadgeSeen {
   @@unique([userId, section])
 }
 
+/**
+ * Which sidebar tabs (by href, matching GYM_NAV_ITEMS in nav-config.ts) each
+ * non-Owner access role can see and reach. Owner is never a row here — it
+ * always has full access, hardcoded, and can't be edited (see
+ * role-permissions.ts). Editable only by Owner, from Settings → Staff
+ * Roles; enforced both in the sidebar (hides the link) and server-side on
+ * every gym page (src/lib/gym/auth.ts requireTabAccess) so a denied tab
+ * can't be reached by navigating to its URL directly.
+ */
+model GymRolePermission {
+  id          String   @id @default(cuid())
+  role        String   @unique // MANAGER | STAFF | MARKETING
+  allowedTabs String[]
+  updatedAt   DateTime @updatedAt
+}
+
 model GymSession {
   id        String   @id @default(cuid())
   tokenHash String   @unique

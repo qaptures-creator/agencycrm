@@ -8,9 +8,11 @@ import type { NavBadgeCounts } from "@/lib/gym/nav-badges";
 
 export function MobileMenuButton({
   user,
+  allowedHrefs,
   badges,
 }: {
   user: { name: string; accessRole: string };
+  allowedHrefs: string[];
   badges: NavBadgeCounts;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -19,7 +21,7 @@ export function MobileMenuButton({
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen(true)}>
         <Menu className="size-5" />
       </Button>
-      <GymMobileSidebar open={open} onClose={() => setOpen(false)} user={user} badges={badges} />
+      <GymMobileSidebar open={open} onClose={() => setOpen(false)} user={user} allowedHrefs={allowedHrefs} badges={badges} />
     </>
   );
 }
