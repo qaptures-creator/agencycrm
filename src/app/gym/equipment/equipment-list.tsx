@@ -101,8 +101,8 @@ export function EquipmentList({ equipment }: { equipment: EquipmentRow[] }) {
                     <TableCell className="text-muted-foreground">{item.location || "—"}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
-                        {dueState && <TriangleAlert className={cn("size-3.5", dueState === "overdue" ? "text-destructive" : "text-warning-foreground")} />}
-                        <span className={cn(dueState === "overdue" && "text-destructive", dueState === "soon" && "text-warning-foreground")}>
+                        {dueState && <TriangleAlert className={cn("size-3.5", dueState === "overdue" ? "text-destructive" : "text-warning")} />}
+                        <span className={cn(dueState === "overdue" && "text-destructive", dueState === "soon" && "text-warning")}>
                           {formatDate(item.nextServiceDate)}
                         </span>
                       </div>

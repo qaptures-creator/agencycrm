@@ -56,7 +56,7 @@ export default async function FinancesPage({
 
       {!ashbourneConnected && (
         <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-          <p className="font-medium text-warning-foreground">Ashbourne Membership Management isn&apos;t connected</p>
+          <p className="font-medium text-warning">Ashbourne Membership Management isn&apos;t connected</p>
           <p className="mt-1 text-muted-foreground">
             Every figure below comes from payments and memberships entered manually in this CRM — showing
             manually-entered data only. Connect Ashbourne in{" "}

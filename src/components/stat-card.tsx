@@ -25,7 +25,7 @@ export function StatCard({
               "mt-1.5 truncate text-2xl font-semibold tracking-tight",
               tone === "destructive" && "text-destructive",
               tone === "success" && "text-success",
-              tone === "warning" && "text-warning-foreground"
+              tone === "warning" && "text-warning"
             )}
           >
             {value}
@@ -37,7 +37,7 @@ export function StatCard({
             "flex size-9 shrink-0 items-center justify-center rounded-lg",
             tone === "destructive" && "bg-destructive/10 text-destructive",
             tone === "success" && "bg-success/10 text-success",
-            tone === "warning" && "bg-warning/15 text-warning-foreground",
+            tone === "warning" && "bg-warning/15 text-warning",
             tone === "default" && "bg-primary/10 text-primary"
           )}
         >

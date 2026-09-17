@@ -167,7 +167,7 @@ export function CalendarView({
                         className={cn(
                           "block truncate rounded px-1 py-0.5 text-[10px] font-medium",
                           e.kind === "shoot" && "bg-primary/15 text-primary",
-                          e.kind === "project-deadline" && "bg-warning/20 text-warning-foreground",
+                          e.kind === "project-deadline" && "bg-warning/20 text-warning",
                           e.kind === "deliverable-deadline" && "bg-accent text-accent-foreground"
                         )}
                         title={e.title}
@@ -205,7 +205,7 @@ function EventIcon({ kind }: { kind: CalEvent["kind"] }) {
     );
   if (kind === "project-deadline")
     return (
-      <div className={cn(cls, "bg-warning/20 text-warning-foreground")}>
+      <div className={cn(cls, "bg-warning/20 text-warning")}>
         <Clapperboard className="size-4" />
       </div>
     );

@@ -143,7 +143,7 @@ function CredentialsReveal({
 }) {
   return (
     <div className="space-y-3 text-sm">
-      <p className="text-warning-foreground">
+      <p className="text-warning">
         Share this temporary password with {credentials.email} securely — it won&apos;t be shown again. They&apos;ll be
         asked to set a new one on first sign-in.
       </p>

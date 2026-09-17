@@ -96,7 +96,7 @@ export function EnquiryDetailSheet({
 
         <SheetBody className="space-y-5">
           {!emailConnected && (
-            <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
+            <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
               Email Integration Required — this enquiry was logged manually. Connect admin@musclemassacre.com in
               Settings → Integrations to pull emails in automatically and reply from here.
             </div>

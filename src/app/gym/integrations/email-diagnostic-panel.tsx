@@ -73,7 +73,7 @@ export function EmailDiagnosticPanel({ canManage, envSummary }: { canManage: boo
           </p>
         </div>
       ) : (
-        <p className="text-xs text-warning-foreground">
+        <p className="text-xs text-warning">
           Not configured — missing Railway env var{envSummary.missing.length === 1 ? "" : "s"}:{" "}
           <span className="font-mono">{envSummary.missing.join(", ")}</span>
         </p>

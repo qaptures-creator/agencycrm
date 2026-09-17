@@ -36,7 +36,7 @@ export default async function PaymentsPage() {
 
       {!ashbourneConnected && (
         <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-          <p className="font-medium text-warning-foreground">Ashbourne Membership Management isn&apos;t connected</p>
+          <p className="font-medium text-warning">Ashbourne Membership Management isn&apos;t connected</p>
           <p className="mt-1 text-muted-foreground">
             Showing manually-entered payments only. Connect Ashbourne in{" "}
             <a href="/gym/integrations" className="text-primary hover:underline">

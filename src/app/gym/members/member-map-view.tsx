@@ -113,7 +113,7 @@ export function MemberMapView({ plans, mapboxToken }: { plans: { id: string; nam
   return (
     <div className="space-y-6">
       {!data?.gymLocation && !loading && (
-        <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground">
+        <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
           <AlertCircle className="size-4 shrink-0" />
           Gym location isn&apos;t set yet — distances can&apos;t be calculated until an address is geocoded in Settings.
         </div>

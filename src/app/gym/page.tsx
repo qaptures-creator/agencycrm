@@ -329,7 +329,7 @@ export default async function GymDashboardPage() {
                   <div className="border-t border-border pt-3 text-xs text-muted-foreground space-y-1">
                     <div className="flex justify-between">
                       <span>Outstanding</span>
-                      <span className="text-warning-foreground">{moneyGBP(revenue.outstanding)}</span>
+                      <span className="text-warning">{moneyGBP(revenue.outstanding)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Failed payments</span>
@@ -379,7 +379,7 @@ function MiniStat({ label, value, tone }: { label: string; value: number; tone?:
         className={cn(
           "mt-1 text-xl font-semibold",
           tone === "success" && "text-success",
-          tone === "warning" && "text-warning-foreground",
+          tone === "warning" && "text-warning",
           tone === "destructive" && "text-destructive"
         )}
       >

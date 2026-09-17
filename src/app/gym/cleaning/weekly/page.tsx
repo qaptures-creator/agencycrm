@@ -12,7 +12,7 @@ function summarizeCell(statuses: string[]) {
   if (statuses.length === 0) return { label: "—", className: "text-muted-foreground" };
   if (statuses.every((s) => s === "COMPLETE")) return { label: `Complete (${statuses.length})`, className: "border-success/40 bg-success/10 text-success" };
   if (statuses.some((s) => s === "MISSED")) return { label: `Missed (${statuses.filter((s) => s === "MISSED").length})`, className: "border-destructive/40 bg-destructive/10 text-destructive" };
-  if (statuses.some((s) => s === "AWAITING_REVIEW")) return { label: `Awaiting Review (${statuses.filter((s) => s === "AWAITING_REVIEW").length})`, className: "border-warning/40 bg-warning/15 text-warning-foreground" };
+  if (statuses.some((s) => s === "AWAITING_REVIEW")) return { label: `Awaiting Review (${statuses.filter((s) => s === "AWAITING_REVIEW").length})`, className: "border-warning/40 bg-warning/15 text-warning" };
   if (statuses.some((s) => s === "IN_PROGRESS")) return { label: `In Progress (${statuses.filter((s) => s === "IN_PROGRESS").length})`, className: "border-primary/40 bg-primary/10 text-primary" };
   return { label: `Pending (${statuses.length})`, className: "border-border bg-secondary/60 text-muted-foreground" };
 }

@@ -36,7 +36,7 @@ function OutcomeSummary({ outcome }: { outcome: SyncOutcome }) {
           <span>Created: <span className="font-medium text-foreground">{outcome.created}</span></span>
           <span>Updated: <span className="font-medium text-foreground">{outcome.updated}</span></span>
           <span>Unchanged: <span className="font-medium text-foreground">{outcome.unchanged}</span></span>
-          <span>Review needed: <span className={cn("font-medium", outcome.reviewRequired > 0 ? "text-warning-foreground" : "text-foreground")}>{outcome.reviewRequired}</span></span>
+          <span>Review needed: <span className={cn("font-medium", outcome.reviewRequired > 0 ? "text-warning" : "text-foreground")}>{outcome.reviewRequired}</span></span>
           <span>Failed: <span className={cn("font-medium", outcome.failed > 0 ? "text-destructive" : "text-foreground")}>{outcome.failed}</span></span>
         </div>
       )}
@@ -95,7 +95,7 @@ export function AshbourneSyncPanel({ envSummary, lastLog }: { envSummary: EnvSum
           <p>Member report: <span className="break-all">{envSummary.memberReportUrl}</span></p>
         </div>
       ) : (
-        <p className="text-xs text-warning-foreground">
+        <p className="text-xs text-warning">
           Not configured — missing Railway env var{envSummary.missing.length === 1 ? "" : "s"}:{" "}
           <span className="font-mono">{envSummary.missing.join(", ")}</span>
         </p>

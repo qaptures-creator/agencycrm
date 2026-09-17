@@ -246,7 +246,7 @@ export function RotaBoard({
                           )}
                         >
                           <div className="flex items-center gap-1 font-medium">
-                            {(hasConflict || long) && <TriangleAlert className="size-3 shrink-0 text-warning-foreground" />}
+                            {(hasConflict || long) && <TriangleAlert className="size-3 shrink-0 text-warning" />}
                             {timeLabel(shift.startTime)}–{timeLabel(shift.endTime)}
                           </div>
                           {shift.shiftRole && <div className="truncate text-muted-foreground">{shift.shiftRole}</div>}

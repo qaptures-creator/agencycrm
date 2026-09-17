@@ -72,7 +72,7 @@ export function ImportSalesReportDialog() {
                 <li>{result.membershipsCreated} new memberships created</li>
                 <li>{result.paymentsCreated} payments recorded</li>
                 {result.paymentsSkippedExisting > 0 && <li>{result.paymentsSkippedExisting} payments already existed (skipped)</li>}
-                {result.rowsSkipped > 0 && <li className="text-warning-foreground">{result.rowsSkipped} rows skipped (unparseable)</li>}
+                {result.rowsSkipped > 0 && <li className="text-warning">{result.rowsSkipped} rows skipped (unparseable)</li>}
               </ul>
             </div>
           )}

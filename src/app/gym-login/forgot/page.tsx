@@ -25,7 +25,7 @@ export default function ForgotPasswordPage() {
                 If that account exists, a reset link has been generated.
               </p>
               {state.resetLink && (
-                <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-warning-foreground">
+                <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-warning">
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide">
                     Email isn&apos;t connected yet — for now, an authorised manager needs to hand you this link securely:
                   </p>

@@ -58,7 +58,7 @@ export default async function MembershipsPage() {
 
       {!ashbourneConnected && (
         <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-          <p className="font-medium text-warning-foreground">Ashbourne Not Connected</p>
+          <p className="font-medium text-warning">Ashbourne Not Connected</p>
           <p className="mt-1 text-muted-foreground">
             Ashbourne Membership Management isn&apos;t connected yet, so plans and members below are managed manually
             in this CRM. Connect it in{" "}
