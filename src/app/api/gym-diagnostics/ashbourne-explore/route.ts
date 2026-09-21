@@ -32,6 +32,11 @@ export async function GET(req: Request) {
         await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
       }
 
+      // The dashboard menu turned out not to be plain <a> tags rendered at
+      // domcontentloaded — give any client-side rendering a moment, then
+      // cast a much wider net than just <a href>.
+      await page.waitForTimeout(1500);
+
       const currentUrl = page.url();
       const title = await page.title().catch(() => null);
 
@@ -43,13 +48,44 @@ export async function GET(req: Request) {
             .filter((l) => l.text.length > 0)
         );
 
-      // De-dupe identical text+href pairs (menus often render twice for
-      // responsive layouts).
+      // Anything clickable-looking that isn't a plain <a> — buttons, divs
+      // with onclick/role=button, list items — common in older ASP.NET
+      // menu widgets.
+      const clickables = await page
+        .locator('button, [onclick], [role="button"], li, .menu-item, .nav-item')
+        .evaluateAll((els) =>
+          els
+            .map((el) => ({
+              tag: el.tagName.toLowerCase(),
+              text: el.textContent?.trim().slice(0, 80) ?? "",
+              onclick: el.getAttribute("onclick"),
+              id: el.id || null,
+            }))
+            .filter((l) => l.text.length > 0 && l.text.length < 80)
+        );
+
+      const iframeSrcs = await page.locator("iframe").evaluateAll((els) => els.map((el) => (el as HTMLIFrameElement).src));
+
+      const bodyText = await page
+        .locator("body")
+        .innerText()
+        .then((t) => t.replace(/\s+/g, " ").trim().slice(0, 3000))
+        .catch(() => "");
+
+      // De-dupe identical text+href/onclick pairs (menus often render
+      // twice for responsive layouts).
       const seen = new Set<string>();
       const uniqueLinks = links.filter((l) => {
         const key = `${l.text}::${l.href}`;
         if (seen.has(key)) return false;
         seen.add(key);
+        return true;
+      });
+      const seenClickables = new Set<string>();
+      const uniqueClickables = clickables.filter((c) => {
+        const key = `${c.tag}::${c.text}::${c.onclick ?? ""}`;
+        if (seenClickables.has(key)) return false;
+        seenClickables.add(key);
         return true;
       });
 
@@ -62,7 +98,7 @@ export async function GET(req: Request) {
         gridHeaders = headerCells.map((h) => h.trim());
       }
 
-      return { currentUrl, title, links: uniqueLinks, gridHeaders };
+      return { currentUrl, title, links: uniqueLinks, clickables: uniqueClickables, iframeSrcs, bodyText, gridHeaders };
     });
 
     return NextResponse.json(result);
