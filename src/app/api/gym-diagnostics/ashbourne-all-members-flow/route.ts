@@ -69,73 +69,85 @@ export async function GET(req: Request) {
       await page.waitForTimeout(1200);
       trace.push(await snapshot(page, "loaded-report-page"));
 
-      // Previous attempt: force-clicking the "OK" button still failed with
-      // "Element is not visible" — that error survives force:true only
-      // when the element has NO layout at all (display:none), which is
-      // exactly what a not-yet-opened Bootstrap modal looks like
-      // (data-dismiss="modal" confirmed this is a modal control). So this
-      // OK almost certainly belongs to a Report Destination-style modal
-      // that only appears later, not to the filter side panel itself. The
-      // panel's own instructions say "...then NEXT to continue" — skip OK
-      // entirely and close the panel via its "×" (closeNav('filterPanel'))
-      // instead, then go straight for Next.
-      const closePanelBtn = page.locator('[onclick*="closeNav"]').first();
-      const closePanelCount = await closePanelBtn.count();
-      let closePanelError: string | null = null;
-      if (closePanelCount > 0) {
+      // Two prior attempts both failed on Playwright's mouse-coordinate
+      // click mechanics (first the wrong element, a not-yet-open modal;
+      // then "outside of the viewport" on the × — the off-canvas panel is
+      // apparently positioned somewhere Playwright's synthetic mouse can't
+      // reach even after scrolling). Sidestepping all of that: call the
+      // panel's own onclick handler directly via evaluate (native JS call,
+      // no mouse/viewport involved at all), and use native DOM .click()
+      // (element.click(), not Playwright's mouse simulation) for every
+      // subsequent step for the same reason.
+      const closePanelResult = await page
+        .evaluate(() => {
+          const w = window as unknown as { closeNav?: (id: string) => void };
+          if (typeof w.closeNav === "function") {
+            w.closeNav("filterPanel");
+            return "called";
+          }
+          return "closeNav-not-a-function";
+        })
+        .catch((err) => `evaluate-threw: ${err instanceof Error ? err.message : String(err)}`);
+      await page.waitForTimeout(800);
+      trace.push({ ...(await snapshot(page, "after-close-panel")), closePanelResult });
+
+      async function nativeClick(selector: string): Promise<string> {
+        const loc = page.locator(selector).first();
+        if ((await loc.count()) === 0) return "not-found";
         try {
-          await closePanelBtn.click({ force: true, timeout: 5000 });
+          await loc.evaluate((el) => (el as HTMLElement).click());
+          return "clicked";
         } catch (err) {
-          closePanelError = err instanceof Error ? err.message : String(err);
+          return `threw: ${err instanceof Error ? err.message : String(err)}`;
         }
       }
-      await page.waitForTimeout(800);
-      trace.push({ ...(await snapshot(page, "after-close-panel")), closePanelCount, closePanelError });
 
-      const nextById = page.locator("#ctl00_cpMain_btnNext");
-      const nextByText = page.locator("button, a").filter({ hasText: /^next$/i }).first();
-      const nextBtn = (await nextById.count()) > 0 ? nextById : nextByText;
-      const nextCount = await nextBtn.count();
-      let nextClickError: string | null = null;
-      if (nextCount > 0) {
-        const urlBefore = page.url();
+      async function nativeClickByText(tag: string, text: RegExp): Promise<string> {
+        const loc = page.locator(tag).filter({ hasText: text }).first();
+        if ((await loc.count()) === 0) return "not-found";
         try {
-          await nextBtn.click({ timeout: 5000 });
+          await loc.evaluate((el) => (el as HTMLElement).click());
+          return "clicked";
         } catch (err) {
-          nextClickError = err instanceof Error ? err.message : String(err);
+          return `threw: ${err instanceof Error ? err.message : String(err)}`;
         }
+      }
+
+      const urlBeforeNext = page.url();
+      const nextResult =
+        (await page.locator("#ctl00_cpMain_btnNext").count()) > 0
+          ? await nativeClick("#ctl00_cpMain_btnNext")
+          : await nativeClickByText("button, a", /^next$/i);
+      try {
+        await page.waitForFunction((prev) => window.location.href !== prev, urlBeforeNext, { timeout: 8000 });
+      } catch {
+        await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+      }
+      trace.push({ ...(await snapshot(page, "after-next")), nextResult });
+
+      // If that revealed a Report Destination-style modal (mirroring the
+      // New Members report's Campaign -> VIEW DATA -> OK -> Next), repeat
+      // the same native-click approach through it.
+      const viewDataLoc = page.getByText(/^view data$/i).first();
+      const hasViewData = (await viewDataLoc.count()) > 0;
+      if (hasViewData) {
+        let viewDataResult = "not-found";
         try {
-          await page.waitForFunction((prev) => window.location.href !== prev, urlBefore, { timeout: 8000 });
+          await viewDataLoc.evaluate((el) => (el as HTMLElement).click());
+          viewDataResult = "clicked";
+        } catch (err) {
+          viewDataResult = `threw: ${err instanceof Error ? err.message : String(err)}`;
+        }
+        const modalOkResult = await nativeClickByText("button", /^OK$/);
+        await page.waitForTimeout(800);
+        const urlBeforeNext2 = page.url();
+        const next2Result = (await page.locator("#ctl00_cpMain_btnNext").count()) > 0 ? await nativeClick("#ctl00_cpMain_btnNext") : "not-found";
+        try {
+          await page.waitForFunction((prev) => window.location.href !== prev, urlBeforeNext2, { timeout: 8000 });
         } catch {
           await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
         }
-      }
-      trace.push({ ...(await snapshot(page, "after-next")), nextCount, nextClickError });
-
-      // If that revealed a Report Destination-style modal (mirroring the
-      // New Members report's Campaign -> VIEW DATA -> OK -> Next), the OK
-      // button should be genuinely visible now — try the same sequence.
-      const viewDataOption = page.getByText(/^view data$/i).first();
-      if ((await viewDataOption.count()) > 0) {
-        await viewDataOption.click().catch(() => {});
-        const modalOk = page.locator("button", { hasText: /^OK$/ }).first();
-        if ((await modalOk.count()) > 0) {
-          await modalOk.click({ timeout: 5000 }).catch(() => {});
-          await page.waitForTimeout(800);
-        }
-        const urlBefore2 = page.url();
-        if ((await page.locator("#ctl00_cpMain_btnNext").count()) > 0) {
-          await page
-            .locator("#ctl00_cpMain_btnNext")
-            .click()
-            .catch(() => {});
-          try {
-            await page.waitForFunction((prev) => window.location.href !== prev, urlBefore2, { timeout: 8000 });
-          } catch {
-            await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-          }
-        }
-        trace.push(await snapshot(page, "after-view-data-modal"));
+        trace.push({ ...(await snapshot(page, "after-view-data-modal")), viewDataResult, modalOkResult, next2Result });
       }
     });
 
