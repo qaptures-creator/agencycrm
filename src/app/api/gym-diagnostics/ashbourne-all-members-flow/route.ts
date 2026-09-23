@@ -69,29 +69,29 @@ export async function GET(req: Request) {
       await page.waitForTimeout(1200);
       trace.push(await snapshot(page, "loaded-report-page"));
 
-      // First pass used getByRole + isVisible() and it never matched, even
-      // though the OK button clearly appears in a plain tag/text scan —
-      // fall back to a plain text-based button locator with a forced click
-      // (bypassing actionability checks) so a stacking/overlay quirk can't
-      // silently no-op this step again.
-      const okBtn = page.locator("button", { hasText: /^OK$/ }).first();
-      const okCount = await okBtn.count();
-      let okClickError: string | null = null;
-      if (okCount > 0) {
+      // Previous attempt: force-clicking the "OK" button still failed with
+      // "Element is not visible" — that error survives force:true only
+      // when the element has NO layout at all (display:none), which is
+      // exactly what a not-yet-opened Bootstrap modal looks like
+      // (data-dismiss="modal" confirmed this is a modal control). So this
+      // OK almost certainly belongs to a Report Destination-style modal
+      // that only appears later, not to the filter side panel itself. The
+      // panel's own instructions say "...then NEXT to continue" — skip OK
+      // entirely and close the panel via its "×" (closeNav('filterPanel'))
+      // instead, then go straight for Next.
+      const closePanelBtn = page.locator('[onclick*="closeNav"]').first();
+      const closePanelCount = await closePanelBtn.count();
+      let closePanelError: string | null = null;
+      if (closePanelCount > 0) {
         try {
-          await okBtn.click({ force: true, timeout: 5000 });
+          await closePanelBtn.click({ force: true, timeout: 5000 });
         } catch (err) {
-          okClickError = err instanceof Error ? err.message : String(err);
+          closePanelError = err instanceof Error ? err.message : String(err);
         }
       }
-      await page.waitForTimeout(1000);
-      trace.push({ ...(await snapshot(page, "after-ok-force-click")), okCount, okClickError });
+      await page.waitForTimeout(800);
+      trace.push({ ...(await snapshot(page, "after-close-panel")), closePanelCount, closePanelError });
 
-      // The body text said "...then NEXT to continue" — this report likely
-      // shares the same underlying template as the already-working "New
-      // Members" report, whose Next button has a stable, verified id
-      // (#ctl00_cpMain_btnNext). Try that exact id before falling back to
-      // a generic text search.
       const nextById = page.locator("#ctl00_cpMain_btnNext");
       const nextByText = page.locator("button, a").filter({ hasText: /^next$/i }).first();
       const nextBtn = (await nextById.count()) > 0 ? nextById : nextByText;
@@ -100,7 +100,7 @@ export async function GET(req: Request) {
       if (nextCount > 0) {
         const urlBefore = page.url();
         try {
-          await nextBtn.click({ force: true, timeout: 5000 });
+          await nextBtn.click({ timeout: 5000 });
         } catch (err) {
           nextClickError = err instanceof Error ? err.message : String(err);
         }
@@ -112,27 +112,22 @@ export async function GET(req: Request) {
       }
       trace.push({ ...(await snapshot(page, "after-next")), nextCount, nextClickError });
 
-      // Mirror the known-working Campaign -> VIEW DATA -> OK -> (already
-      // clicked Next above) sequence from the New Members report, in case
-      // this one also routes through a Report Destination modal.
-      const campaignBtn = page.locator("button, a").filter({ hasText: /^campaign$/i }).first();
-      if ((await campaignBtn.count()) > 0) {
-        await campaignBtn.click({ force: true }).catch(() => {});
-        await page.waitForTimeout(500);
-        const viewDataOption = page.getByText(/^view data$/i).first();
-        if ((await viewDataOption.count()) > 0) {
-          await viewDataOption.click({ force: true }).catch(() => {});
-          const modalOk = page.locator("button", { hasText: /^OK$/ }).first();
-          if ((await modalOk.count()) > 0) {
-            await modalOk.click({ force: true }).catch(() => {});
-            await page.waitForTimeout(800);
-          }
+      // If that revealed a Report Destination-style modal (mirroring the
+      // New Members report's Campaign -> VIEW DATA -> OK -> Next), the OK
+      // button should be genuinely visible now — try the same sequence.
+      const viewDataOption = page.getByText(/^view data$/i).first();
+      if ((await viewDataOption.count()) > 0) {
+        await viewDataOption.click().catch(() => {});
+        const modalOk = page.locator("button", { hasText: /^OK$/ }).first();
+        if ((await modalOk.count()) > 0) {
+          await modalOk.click({ timeout: 5000 }).catch(() => {});
+          await page.waitForTimeout(800);
         }
         const urlBefore2 = page.url();
         if ((await page.locator("#ctl00_cpMain_btnNext").count()) > 0) {
           await page
             .locator("#ctl00_cpMain_btnNext")
-            .click({ force: true })
+            .click()
             .catch(() => {});
           try {
             await page.waitForFunction((prev) => window.location.href !== prev, urlBefore2, { timeout: 8000 });
@@ -140,7 +135,7 @@ export async function GET(req: Request) {
             await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
           }
         }
-        trace.push(await snapshot(page, "after-campaign-modal-attempt"));
+        trace.push(await snapshot(page, "after-view-data-modal"));
       }
     });
 
