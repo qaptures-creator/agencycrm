@@ -59,7 +59,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const trace: Awaited<ReturnType<typeof snapshot>>[] = [];
+  const trace: Record<string, unknown>[] = [];
 
   try {
     await withAshbourneBrowser(async (page, cfg) => {
@@ -69,61 +69,78 @@ export async function GET(req: Request) {
       await page.waitForTimeout(1200);
       trace.push(await snapshot(page, "loaded-report-page"));
 
-      // Dismiss the filter side panel via its OK button, accepting
-      // whatever's already selected (every checkbox appeared ticked by
-      // default when we looked at this page, matching the pre-filter
-      // "2309 members" count).
-      const okBtn = page.getByRole("button", { name: /^ok$/i }).first();
-      if (await okBtn.isVisible().catch(() => false)) {
-        await okBtn.click();
-        await page.waitForTimeout(1000);
-        trace.push(await snapshot(page, "after-ok"));
-      } else {
-        trace.push(await snapshot(page, "no-ok-button-found"));
+      // First pass used getByRole + isVisible() and it never matched, even
+      // though the OK button clearly appears in a plain tag/text scan —
+      // fall back to a plain text-based button locator with a forced click
+      // (bypassing actionability checks) so a stacking/overlay quirk can't
+      // silently no-op this step again.
+      const okBtn = page.locator("button", { hasText: /^OK$/ }).first();
+      const okCount = await okBtn.count();
+      let okClickError: string | null = null;
+      if (okCount > 0) {
+        try {
+          await okBtn.click({ force: true, timeout: 5000 });
+        } catch (err) {
+          okClickError = err instanceof Error ? err.message : String(err);
+        }
       }
+      await page.waitForTimeout(1000);
+      trace.push({ ...(await snapshot(page, "after-ok-force-click")), okCount, okClickError });
 
-      // From here the flow is unknown — look for whatever the most
-      // likely "proceed" control is among common labels, up to two
-      // rounds, snapshotting after each so the trace shows exactly what
-      // was clicked and what happened.
-      const candidateLabels = [/^campaign$/i, /^next$/i, /^search$/i, /^run$/i, /^go$/i, /^generate$/i, /^view$/i, /^export$/i];
+      // The body text said "...then NEXT to continue" — this report likely
+      // shares the same underlying template as the already-working "New
+      // Members" report, whose Next button has a stable, verified id
+      // (#ctl00_cpMain_btnNext). Try that exact id before falling back to
+      // a generic text search.
+      const nextById = page.locator("#ctl00_cpMain_btnNext");
+      const nextByText = page.locator("button, a").filter({ hasText: /^next$/i }).first();
+      const nextBtn = (await nextById.count()) > 0 ? nextById : nextByText;
+      const nextCount = await nextBtn.count();
+      let nextClickError: string | null = null;
+      if (nextCount > 0) {
+        const urlBefore = page.url();
+        try {
+          await nextBtn.click({ force: true, timeout: 5000 });
+        } catch (err) {
+          nextClickError = err instanceof Error ? err.message : String(err);
+        }
+        try {
+          await page.waitForFunction((prev) => window.location.href !== prev, urlBefore, { timeout: 8000 });
+        } catch {
+          await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+        }
+      }
+      trace.push({ ...(await snapshot(page, "after-next")), nextCount, nextClickError });
 
-      for (let round = 0; round < 2; round++) {
-        let clicked = false;
-        for (const label of candidateLabels) {
-          const btn = page.getByRole("button", { name: label }).first();
-          if (await btn.isVisible().catch(() => false)) {
-            const urlBefore = page.url();
-            await btn.click();
+      // Mirror the known-working Campaign -> VIEW DATA -> OK -> (already
+      // clicked Next above) sequence from the New Members report, in case
+      // this one also routes through a Report Destination modal.
+      const campaignBtn = page.locator("button, a").filter({ hasText: /^campaign$/i }).first();
+      if ((await campaignBtn.count()) > 0) {
+        await campaignBtn.click({ force: true }).catch(() => {});
+        await page.waitForTimeout(500);
+        const viewDataOption = page.getByText(/^view data$/i).first();
+        if ((await viewDataOption.count()) > 0) {
+          await viewDataOption.click({ force: true }).catch(() => {});
+          const modalOk = page.locator("button", { hasText: /^OK$/ }).first();
+          if ((await modalOk.count()) > 0) {
+            await modalOk.click({ force: true }).catch(() => {});
             await page.waitForTimeout(800);
-
-            // If this opened a modal with a "VIEW DATA" style option
-            // (same pattern as the existing New Members report), pick it
-            // and confirm with OK.
-            const viewDataOption = page.getByText(/^view data$/i).first();
-            if (await viewDataOption.isVisible().catch(() => false)) {
-              await viewDataOption.click();
-              const modalOk = page.getByRole("button", { name: /^ok$/i }).first();
-              if (await modalOk.isVisible().catch(() => false)) {
-                await modalOk.click();
-                await page.waitForTimeout(800);
-              }
-            }
-
-            try {
-              await page.waitForFunction((prev) => window.location.href !== prev, urlBefore, { timeout: 8000 });
-            } catch {
-              await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-            }
-
-            trace.push(await snapshot(page, `after-click-${label.source}`));
-            clicked = true;
-            break;
           }
         }
-        if (!clicked) break;
-        // Stop early once a grid shows up.
-        if (trace[trace.length - 1]?.gridHeaders) break;
+        const urlBefore2 = page.url();
+        if ((await page.locator("#ctl00_cpMain_btnNext").count()) > 0) {
+          await page
+            .locator("#ctl00_cpMain_btnNext")
+            .click({ force: true })
+            .catch(() => {});
+          try {
+            await page.waitForFunction((prev) => window.location.href !== prev, urlBefore2, { timeout: 8000 });
+          } catch {
+            await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+          }
+        }
+        trace.push(await snapshot(page, "after-campaign-modal-attempt"));
       }
     });
 
