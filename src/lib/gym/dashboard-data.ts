@@ -1,7 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek } from "date-fns";
+import { startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, differenceInDays } from "date-fns";
 import { getActiveMembershipCount, getNewMembershipsThisMonth, getDayPassesThisMonth } from "./membership-kpis";
+import { getLatestAshbourneSyncLog } from "@/lib/ashbourne/sync";
+
+const STALE_SYNC_DAYS = 7;
 
 const MONTHLY_MULTIPLIER: Record<string, number> = { WEEKLY: 52 / 12, MONTHLY: 1, ANNUAL: 1 / 12 };
 
@@ -180,7 +183,7 @@ export async function getAlerts(): Promise<Alert[]> {
   const now = new Date();
   const alerts: Alert[] = [];
 
-  const [failedPayments, cancellations, equipmentIssues, urgentMaintenance, overdueTasks, lowStock, urgentIncidents] =
+  const [failedPayments, cancellations, equipmentIssues, urgentMaintenance, overdueTasks, lowStock, urgentIncidents, latestSync] =
     await Promise.all([
       prisma.gymPayment.findMany({ where: { status: "FAILED" }, include: { member: true }, take: 5, orderBy: { date: "desc" } }),
       prisma.gymMembership.findMany({
@@ -199,7 +202,18 @@ export async function getAlerts(): Promise<Alert[]> {
         where: { followUpRequired: true, createdAt: { gte: startOfWeek(now) } },
         take: 5,
       }),
+      getLatestAshbourneSyncLog(),
     ]);
+
+  const syncAgeDays = latestSync?.completedAt ? differenceInDays(now, latestSync.completedAt) : null;
+  if (syncAgeDays === null || syncAgeDays > STALE_SYNC_DAYS) {
+    alerts.push({
+      id: "ashbourne-sync-stale",
+      severity: "warning",
+      message: syncAgeDays === null ? "Member data has never been synced from Ashbourne" : `Member data last synced ${syncAgeDays} days ago — run Sync Now`,
+      href: "/gym/integrations",
+    });
+  }
 
   for (const p of failedPayments) {
     alerts.push({

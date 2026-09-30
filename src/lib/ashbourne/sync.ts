@@ -3,9 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { getAshbourneConfig } from "./config";
 import { withAshbourneBrowser } from "./client";
 import { loginToAshbourne } from "./auth";
-import { fetchAshbourneMembers } from "./reports";
+import { fetchAshbourneAllMembersCsv } from "./reports";
 import type { AshbourneMember } from "./types";
 import { AshbourneConnectorError } from "./types";
+import { canonicalizeMembershipType, canonicalizeAshbourneStatus, deriveMembershipStatus } from "@/lib/gym/membership-rules";
 
 /**
  * Matching (Phase 5): ashbourneMemberNo first, then memberNumber (catches
@@ -16,8 +17,8 @@ import { AshbourneConnectorError } from "./types";
  *
  * Field ownership (Phase 6): Ashbourne fields (ashbourneStatus/
  * ashbourneMembershipType/ashbourneExpiryDate/ashbourneLastSyncedAt) are
- * always refreshed on a match. email/phone are filled only if currently
- * empty — never overwritten. fullName/joinDate/notes/address and
+ * always refreshed on a match. email/phone/dob/address/postcode are filled
+ * only if currently empty — never overwritten. fullName/joinDate/notes and
  * everything else CRM-owned is left untouched on existing members.
  *
  * ashbourneCardNumber (Card No, added for live-entry matching — distinct
@@ -25,6 +26,17 @@ import { AshbourneConnectorError } from "./types";
  * report row actually has one: set/refreshed whenever record.cardNo is
  * present, left as-is when a row is missing it rather than blanking out a
  * previously-synced value.
+ *
+ * Membership status (Phase 12): fetchAshbourneAllMembersCsv (see reports.ts)
+ * replaced the old "New Members" report, which had no Status/Membership
+ * Type/date columns at all — every synced member now also gets its one
+ * ASHBOURNE-sourced GymMembership upserted, with `status` computed by the
+ * single shared deriveMembershipStatus function (membership-rules.ts) from
+ * real dates, not trusted from Ashbourne's raw status text. Raw
+ * Status/Membership Type values are canonicalized to a consistent casing
+ * before being stored anywhere (Ashbourne's exports are ALL CAPS; the rest
+ * of the app's matching logic compares Title Case) — see
+ * canonicalizeAshbourneStatus/canonicalizeMembershipType.
  */
 
 export type SyncOutcome = {
@@ -87,7 +99,7 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
   const cfg = getAshbourneConfig(); // throws AshbourneNotConfiguredError if unset — caller handles
 
   const log = await prisma.gymAshbourneSyncLog.create({
-    data: { status: "RUNNING", dryRun: opts.dryRun, reportUrl: cfg.memberReportUrl },
+    data: { status: "RUNNING", dryRun: opts.dryRun, reportUrl: cfg.allMembersReportUrl },
   });
 
   const outcome: SyncOutcome = {
@@ -103,10 +115,61 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
     sample: [],
   };
 
+  // Plan lookups are cached per run (mirrors ashbourne-sales-import.ts) —
+  // a fresh sync of ~2,375 members would otherwise re-query the same ~10
+  // membership type plans thousands of times.
+  const planCache = new Map<string, string>(); // canonical plan name -> id
+
+  async function findOrCreatePlanId(canonType: string): Promise<string> {
+    const cached = planCache.get(canonType);
+    if (cached) return cached;
+    const existingPlan = await prisma.gymMembershipPlan.findFirst({ where: { name: canonType, source: "ASHBOURNE" } });
+    const plan = existingPlan ?? (await prisma.gymMembershipPlan.create({ data: { name: canonType, price: 0, source: "ASHBOURNE" } }));
+    planCache.set(canonType, plan.id);
+    return plan.id;
+  }
+
+  /** Upserts the one ASHBOURNE-sourced GymMembership for a member — status
+   * is always computed via deriveMembershipStatus (Step 2 of the
+   * membership-accuracy plan: derived from dates every sync, never trusted
+   * from a stored value), never set directly from the raw Ashbourne status
+   * text. freezeStart/freezeEnd/cancelledAt are never touched here —
+   * Ashbourne's export has no signal for them (see deriveMembershipStatus's
+   * doc comment), so those stay CRM-manual. */
+  async function upsertMembership(memberId: string, record: AshbourneMember, canonType: string | null, canonStatus: string | null) {
+    const planId = await findOrCreatePlanId(canonType ?? "Unknown");
+    const status = deriveMembershipStatus({ ashbourneStatus: canonStatus, startDate: record.joinedDate ?? null, endDate: record.expiryDate ?? null });
+    const existingMembership = await prisma.gymMembership.findFirst({ where: { memberId, source: "ASHBOURNE" }, select: { id: true } });
+
+    const data = {
+      planId,
+      status,
+      startDate: record.joinedDate ?? undefined,
+      renewalDate: record.expiryDate ?? null,
+      billingAmount: record.periodPayment ?? undefined,
+    };
+
+    if (existingMembership) {
+      await prisma.gymMembership.update({ where: { id: existingMembership.id }, data });
+    } else {
+      await prisma.gymMembership.create({
+        data: {
+          memberId,
+          planId,
+          status,
+          startDate: record.joinedDate ?? new Date(),
+          renewalDate: record.expiryDate ?? null,
+          billingAmount: record.periodPayment ?? 0,
+          source: "ASHBOURNE",
+        },
+      });
+    }
+  }
+
   try {
     const result = await withAshbourneBrowser(async (page, config) => {
       await loginToAshbourne(page, config);
-      return fetchAshbourneMembers(page, config);
+      return fetchAshbourneAllMembersCsv(page, config);
     });
 
     outcome.recordsFound = result.members.length;
@@ -117,6 +180,9 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
           outcome.skipped++;
           continue;
         }
+
+        const canonType = canonicalizeMembershipType(record.membershipType ?? null);
+        const canonStatus = canonicalizeAshbourneStatus(record.status ?? null);
 
         const match = await findMatch(record);
 
@@ -139,21 +205,25 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
             if (outcome.sample!.length < 10) outcome.sample!.push({ action: "create", memberNo: record.memberNo, name: fullNameOf(record) });
             continue;
           }
-          await prisma.gymMember.create({
+          const created = await prisma.gymMember.create({
             data: {
               memberNumber: record.memberNo,
               fullName: fullNameOf(record),
               email: record.email ?? null,
               phone: record.mobile ?? null,
-              joinDate: record.clubInfoDate ?? new Date(),
+              dob: record.dob ?? null,
+              address: record.address ?? null,
+              postcode: record.postcode ?? null,
+              joinDate: record.joinedDate ?? record.clubInfoDate ?? new Date(),
               ashbourneMemberNo: record.memberNo,
               ashbourneCardNumber: record.cardNo ?? null,
-              ashbourneStatus: record.status ?? null,
-              ashbourneMembershipType: record.membershipType ?? null,
+              ashbourneStatus: canonStatus,
+              ashbourneMembershipType: canonType,
               ashbourneExpiryDate: record.expiryDate ?? null,
               ashbourneLastSyncedAt: new Date(),
             },
           });
+          await upsertMembership(created.id, record, canonType, canonStatus);
           outcome.created++;
           continue;
         }
@@ -165,22 +235,34 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
           select: {
             email: true,
             phone: true,
+            dob: true,
+            address: true,
+            postcode: true,
             ashbourneMemberNo: true,
             ashbourneCardNumber: true,
             ashbourneStatus: true,
             ashbourneMembershipType: true,
             ashbourneExpiryDate: true,
+            memberships: { where: { source: "ASHBOURNE" }, select: { status: true, renewalDate: true, startDate: true }, take: 1 },
           },
         });
+        const existingMembership = existing.memberships[0] ?? null;
+        const computedStatus = deriveMembershipStatus({ ashbourneStatus: canonStatus, startDate: record.joinedDate ?? null, endDate: record.expiryDate ?? null });
 
         const fieldsChanged =
           existing.ashbourneMemberNo !== record.memberNo ||
           (!!record.cardNo && existing.ashbourneCardNumber !== record.cardNo) ||
-          existing.ashbourneStatus !== (record.status ?? null) ||
-          existing.ashbourneMembershipType !== (record.membershipType ?? null) ||
+          existing.ashbourneStatus !== canonStatus ||
+          existing.ashbourneMembershipType !== canonType ||
           (existing.ashbourneExpiryDate?.getTime() ?? null) !== (record.expiryDate?.getTime() ?? null) ||
           (!existing.email && !!record.email) ||
-          (!existing.phone && !!record.mobile);
+          (!existing.phone && !!record.mobile) ||
+          (!existing.dob && !!record.dob) ||
+          (!existing.address && !!record.address) ||
+          (!existing.postcode && !!record.postcode) ||
+          !existingMembership ||
+          existingMembership.status !== computedStatus ||
+          (existingMembership.renewalDate?.getTime() ?? null) !== (record.expiryDate?.getTime() ?? null);
 
         if (opts.dryRun) {
           if (fieldsChanged) {
@@ -196,8 +278,8 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
           where: { id: memberId },
           data: {
             ashbourneMemberNo: record.memberNo,
-            ashbourneStatus: record.status ?? null,
-            ashbourneMembershipType: record.membershipType ?? null,
+            ashbourneStatus: canonStatus,
+            ashbourneMembershipType: canonType,
             ashbourneExpiryDate: record.expiryDate ?? null,
             ashbourneLastSyncedAt: new Date(),
             // Refreshed only when this report row actually has a Card No —
@@ -206,8 +288,12 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
             // Fill-only — never overwrite an existing value.
             ...(!existing.email && record.email ? { email: record.email } : {}),
             ...(!existing.phone && record.mobile ? { phone: record.mobile } : {}),
+            ...(!existing.dob && record.dob ? { dob: record.dob } : {}),
+            ...(!existing.address && record.address ? { address: record.address } : {}),
+            ...(!existing.postcode && record.postcode ? { postcode: record.postcode } : {}),
           },
         });
+        await upsertMembership(memberId, record, canonType, canonStatus);
 
         if (fieldsChanged) outcome.updated++;
         else outcome.unchanged++;

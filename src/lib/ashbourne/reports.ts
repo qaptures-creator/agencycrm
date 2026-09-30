@@ -1,10 +1,13 @@
 import "server-only";
+import os from "os";
+import path from "path";
+import fs from "fs/promises";
 import type { Page } from "playwright";
 import type { AshbourneConfig } from "./config";
 import type { AshbourneFetchResult } from "./types";
 import { AshbourneConnectorError } from "./types";
 import { captureDebugScreenshot } from "./client";
-import { rowsToMembers } from "./parser";
+import { rowsToMembers, parseCsvExport } from "./parser";
 
 /**
  * Retrieves members from Ashbourne's "New Members (All)" report — a
@@ -187,4 +190,183 @@ export async function fetchAshbourneMembers(page: Page, cfg: AshbourneConfig): P
   }
 
   return { members, method: "grid-scrape", debug: { reportUrl: cfg.memberReportUrl, columnsFound: headers } };
+}
+
+/** Fires a real DOM click (not Playwright's synthetic mouse simulation) —
+ * confirmed during the original investigation that for this report, a
+ * clean Playwright click on a correctly-positioned, visible target still
+ * silently did nothing; the real blocker turned out to be unrelated
+ * (unchecked filter checkboxes), but native click() is kept since it's what
+ * was proven to work end-to-end against the live site. */
+async function nativeClick(page: Page, selector: string): Promise<boolean> {
+  const loc = page.locator(selector).first();
+  if ((await loc.count()) === 0) return false;
+  await loc.evaluate((el) => (el as HTMLElement).click());
+  return true;
+}
+
+/**
+ * Retrieves members from Ashbourne's "All Members" report
+ * (reportmembership.aspx?id=1) — the only report with Status/Membership
+ * Type/Expire Date/Joined Date columns (fetchAshbourneMembers above scrapes
+ * "New Members (All)", which has neither). Confirmed against the real site
+ * (2026-09-30 diagnostic investigation, 11 attempts) as a genuinely
+ * different, longer wizard than the New Members report:
+ *
+ *  1. Land on the report page — a "Filter" side panel lists 22 Status/
+ *     Membership Type checkboxes, none checked by default. All 22 are
+ *     checked directly via the DOM (not by opening the visual panel —
+ *     unnecessary, since the checkboxes exist in the DOM regardless of the
+ *     panel's slide-in/out CSS state) so the export covers every member
+ *     regardless of status, rather than needing one run per status value.
+ *  2. The real "Apply" button (#ctl00_cpMain_btnApply) is clicked — not
+ *     simulated via its onclick attribute's closeNav() call directly, which
+ *     visually closes the panel the same way but was proven (by comparing
+ *     the two) to skip whatever additionally saves the filter selection
+ *     server-side; without a real Apply click, every later step still
+ *     "succeeds" but the report renders as if unfiltered/empty.
+ *  3. "Next >>" (#ctl00_cpMain_btnNext) reveals a Report Destination modal
+ *     (SMS/PUSH/EMAIL/EXPORT/VIEW DATA/E-Mail Template radios) inline on
+ *     the same page — selecting "EXPORT" (not "VIEW DATA", which only ever
+ *     renders a 5-column preview with no Status/Type/date columns at all,
+ *     confirmed by direct inspection) and "OK" closes it.
+ *  4. A second "Next >>" click navigates to campaignexport.aspx — its own
+ *     mini-wizard: a File Type dropdown (#ctl00_cpMain_dlExport, "Please
+ *     Choose"/"Excel/CSV"/"Adobe/PDF" — must be driven with a real select
+ *     value change, not a DOM click on the option text, which doesn't
+ *     actually select a native <select> in a headless browser), an
+ *     "Export" button (#ctl00_cpMain_btnRun) that generates the file
+ *     server-side, and a "DOWNLOAD" button (#ctl00_cpMain_btnDownload)
+ *     that triggers the actual browser download.
+ *
+ * The resulting CSV has every column the New Members report lacks: Status,
+ * Mem Type, Joined date, Expire Date, Card No, Last Pay Date, Postcode,
+ * DOB, Address, and more (see parser.ts's HEADER_ALIASES).
+ */
+export async function fetchAshbourneAllMembersCsv(page: Page, cfg: AshbourneConfig): Promise<AshbourneFetchResult> {
+  const reportUrl = cfg.allMembersReportUrl;
+
+  try {
+    await page.goto(reportUrl, { waitUntil: "domcontentloaded" });
+  } catch (err) {
+    throw new AshbourneConnectorError("navigate-all-members-report", `Could not reach the All Members report URL: ${err instanceof Error ? err.message : "unknown error"}`);
+  }
+  await page.waitForTimeout(1000);
+
+  // --- Step: check every Status/Membership Type filter checkbox ---
+  const checkboxCount = await page.evaluate(() => {
+    const boxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    for (const box of boxes) {
+      if (!box.checked) {
+        box.checked = true;
+        box.dispatchEvent(new Event("change", { bubbles: true }));
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+    return boxes.length;
+  });
+  if (checkboxCount === 0) {
+    throw await withDebugScreenshot(page, "all-members-checkboxes-not-found", "Could not find the Status/Membership Type filter checkboxes on the All Members report page — the page layout may have changed.");
+  }
+
+  // --- Step: real Apply click (see function doc — not closeNav()) ---
+  const applied = await nativeClick(page, "#ctl00_cpMain_btnApply");
+  if (!applied) {
+    throw await withDebugScreenshot(page, "all-members-apply-not-found", "Could not find the Apply button (#ctl00_cpMain_btnApply) on the All Members report page.");
+  }
+  await page.waitForTimeout(800);
+
+  // --- Step: Next -> Report Destination modal -> EXPORT -> OK ---
+  const urlBeforeNext1 = page.url();
+  const next1 = await nativeClick(page, "#ctl00_cpMain_btnNext");
+  if (!next1) {
+    throw await withDebugScreenshot(page, "all-members-next-not-found", "Could not find the Next button (#ctl00_cpMain_btnNext) after applying filters.");
+  }
+  try {
+    await page.waitForFunction((prev) => window.location.href !== prev, urlBeforeNext1, { timeout: 8000 });
+  } catch {
+    await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+  }
+
+  const exportOption = page.getByText(/^export$/i).first();
+  const hasExportOption = (await exportOption.count()) > 0;
+  if (!hasExportOption) {
+    throw await withDebugScreenshot(page, "all-members-export-option-not-found", "Could not find the 'EXPORT' Report Destination option after clicking Next.");
+  }
+  await exportOption.evaluate((el) => (el as HTMLElement).click());
+  await page.waitForTimeout(300);
+
+  const okClicked = await (async () => {
+    const loc = page.locator("button").filter({ hasText: /^OK$/ }).first();
+    if ((await loc.count()) === 0) return false;
+    await loc.evaluate((el) => (el as HTMLElement).click());
+    return true;
+  })();
+  if (!okClicked) {
+    throw await withDebugScreenshot(page, "all-members-ok-not-found", "Selected 'EXPORT' but couldn't find the OK button to confirm the Report Destination modal.");
+  }
+  await page.waitForTimeout(800);
+
+  // --- Step: second Next -> campaignexport.aspx wizard ---
+  const urlBeforeNext2 = page.url();
+  const next2 = await nativeClick(page, "#ctl00_cpMain_btnNext");
+  if (!next2) {
+    throw await withDebugScreenshot(page, "all-members-next2-not-found", "Could not find the Next button after confirming the EXPORT destination.");
+  }
+  try {
+    await page.waitForFunction((prev) => window.location.href !== prev, urlBeforeNext2, { timeout: 8000 });
+  } catch {
+    await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+  }
+  if (!page.url().includes("campaignexport.aspx")) {
+    throw await withDebugScreenshot(page, "all-members-export-page-not-reached", `Expected to land on campaignexport.aspx but got ${page.url()}.`);
+  }
+
+  // --- Step: File Type = Excel/CSV (selectOption, not a DOM click — see
+  // function doc), then Export -> Download ---
+  const exportSelect = page.locator("#ctl00_cpMain_dlExport");
+  if ((await exportSelect.count()) === 0) {
+    throw await withDebugScreenshot(page, "all-members-filetype-select-not-found", "Could not find the File Type dropdown (#ctl00_cpMain_dlExport) on the export page.");
+  }
+  await exportSelect.selectOption({ label: "Excel/CSV" });
+  await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(500);
+
+  const runClicked = await nativeClick(page, "#ctl00_cpMain_btnRun");
+  if (!runClicked) {
+    throw await withDebugScreenshot(page, "all-members-run-not-found", "Could not find the Export button (#ctl00_cpMain_btnRun) on the export page.");
+  }
+  await page.waitForTimeout(1500);
+
+  const downloadPromise = page.waitForEvent("download", { timeout: 20_000 }).catch(() => null);
+  const downloadClicked = await nativeClick(page, "#ctl00_cpMain_btnDownload");
+  if (!downloadClicked) {
+    throw await withDebugScreenshot(page, "all-members-download-not-found", "Could not find the DOWNLOAD button (#ctl00_cpMain_btnDownload) on the export page.");
+  }
+  const download = await downloadPromise;
+  if (!download) {
+    throw await withDebugScreenshot(page, "all-members-download-timed-out", "Clicked DOWNLOAD but no file download event fired within 20 seconds.");
+  }
+
+  const savePath = path.join(os.tmpdir(), `ashbourne-all-members-${Date.now()}.csv`);
+  await download.saveAs(savePath);
+  let csvText: string;
+  try {
+    csvText = await fs.readFile(savePath, "utf8");
+  } finally {
+    await fs.unlink(savePath).catch(() => {});
+  }
+
+  const members = parseCsvExport(csvText);
+  const headers = csvText.split(/\r?\n/)[0]?.split(",").map((h) => h.trim()) ?? [];
+
+  if (members.length === 0) {
+    throw await withDebugScreenshot(
+      page,
+      "all-members-zero-records",
+      `Downloaded the export (${csvText.length} bytes, ${headers.length} columns) but it parsed to 0 member rows. Treating this as a failure rather than a valid empty sync.`
+    );
+  }
+
+  return { members, method: "export", debug: { reportUrl, columnsFound: headers } };
 }

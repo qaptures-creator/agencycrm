@@ -64,7 +64,7 @@ export default async function GymDashboardPage() {
       getMembershipSnapshot(),
       getAlerts(),
       showFinance ? getRevenueSnapshot() : Promise.resolve(null),
-      showAshbourne ? getLatestAshbourneSyncLog() : Promise.resolve(null),
+      getLatestAshbourneSyncLog(),
       getTodayLiveEntryStats(),
     ]);
 
@@ -81,6 +81,8 @@ export default async function GymDashboardPage() {
         failed: ashbourneLastLogRaw.failed,
       }
     : null;
+
+  const syncStale = !ashbourneLastLog?.completedAt || (new Date().getTime() - new Date(ashbourneLastLog.completedAt).getTime()) / 86_400_000 > 7;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -272,13 +274,20 @@ export default async function GymDashboardPage() {
           <CardHeader>
             <CardTitle className="text-sm font-semibold">Membership Snapshot</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
-            <MiniStat label="Total Active" value={membershipSnapshot.totalActive} />
-            <MiniStat label="New Joins" value={membershipSnapshot.newJoins} tone="success" />
-            <MiniStat label="Cancellations" value={membershipSnapshot.cancellations} tone="destructive" />
-            <MiniStat label="Freezes" value={membershipSnapshot.frozen} />
-            <MiniStat label="Expired" value={membershipSnapshot.expired} />
-            <MiniStat label="Overdue" value={membershipSnapshot.overdue} tone="warning" />
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <MiniStat label="Total Active" value={membershipSnapshot.totalActive} />
+              <MiniStat label="New Joins" value={membershipSnapshot.newJoins} tone="success" />
+              <MiniStat label="Cancellations" value={membershipSnapshot.cancellations} tone="destructive" />
+              <MiniStat label="Freezes" value={membershipSnapshot.frozen} />
+              <MiniStat label="Expired" value={membershipSnapshot.expired} />
+              <MiniStat label="Overdue" value={membershipSnapshot.overdue} tone="warning" />
+            </div>
+            <p className={cn("border-t border-border pt-2 text-xs", syncStale ? "text-warning" : "text-muted-foreground")}>
+              {ashbourneLastLog?.completedAt
+                ? `Member data last synced: ${formatDateTime(ashbourneLastLog.completedAt)}${syncStale ? " — stale" : ""}`
+                : "Member data has never been synced from Ashbourne"}
+            </p>
           </CardContent>
         </Card>
       </div>

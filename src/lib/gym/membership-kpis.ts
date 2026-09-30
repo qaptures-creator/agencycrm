@@ -1,7 +1,7 @@
 import "server-only";
 import { startOfMonth, endOfMonth } from "date-fns";
 import { prisma } from "@/lib/prisma";
-import { ACTIVE_MEMBERSHIP_TYPES, ACTIVE_MEMBERSHIP_STATUSES, DAY_PASS_TYPE } from "./membership-rules";
+import { ACTIVE_MEMBERSHIP_TYPES, DAY_PASS_TYPE } from "./membership-rules";
 
 /**
  * Centralized dashboard/Membership Snapshot KPI queries — the single
@@ -9,37 +9,25 @@ import { ACTIVE_MEMBERSHIP_TYPES, ACTIVE_MEMBERSHIP_STATUSES, DAY_PASS_TYPE } fr
  * different definitions. Business rules live in membership-rules.ts
  * (pure, unit-tested); this file only turns them into Prisma queries.
  *
- * Data reality (confirmed against production, 2026-08-21): the fields that
- * hold the exact Live/New/Defaulter/... vocabulary —
- * GymMember.ashbourneMembershipType/ashbourneStatus — are only populated
- * by a real (non-dry-run) Ashbourne Sync Now, which hasn't run yet, so
- * they're null for every member today. The type/status data that's
- * actually live comes from GymMembership.plan.name (matches the type
- * vocabulary exactly) and GymMembership.status (a coarser
- * ACTIVE/FROZEN/EXPIRED/OVERDUE enum — the fine status text was never
- * captured by either CSV importer). So: prefer the Ashbourne fields when a
- * member has them (future-proofs this once real syncs start writing them),
- * otherwise fall back to plan.name + status === "ACTIVE" as the closest
- * available proxy for "in force."
+ * Active Members (Phase 12 rewrite): reads GymMembership.status/plan.name
+ * directly — the same table Frozen/Expired/Overdue/Cancellations already
+ * read (see dashboard-data.ts) — instead of the GymMember-level
+ * ashbourneMembershipType/ashbourneStatus fields this used previously. That
+ * older approach silently matched nothing once real Ashbourne syncs started
+ * writing those fields in ALL CAPS ("LIVE", "12 MONTH CONTRACT") against a
+ * Title Case `in` list — status is now computed by the one shared
+ * deriveMembershipStatus function at sync time (see ashbourne/sync.ts) and
+ * plan.name is canonicalized to a consistent casing there too, so a plain
+ * exact match here is reliable without any case workaround.
  */
 
 const ACTIVE_TYPES_ARR = [...ACTIVE_MEMBERSHIP_TYPES];
-const ACTIVE_STATUSES_ARR = [...ACTIVE_MEMBERSHIP_STATUSES];
 
 /** Genuine ongoing memberships only — never Day Pass/PAYG/Cash Membership
- * Temp, regardless of status. Prefers synced Ashbourne fields on the member
- * when present, falls back to plan.name + GymMembership.status otherwise. */
+ * Temp, regardless of status. */
 export async function getActiveMembershipCount(): Promise<number> {
-  return prisma.gymMember.count({
-    where: {
-      OR: [
-        { ashbourneMembershipType: { in: ACTIVE_TYPES_ARR }, ashbourneStatus: { in: ACTIVE_STATUSES_ARR } },
-        {
-          ashbourneMembershipType: null,
-          memberships: { some: { plan: { name: { in: ACTIVE_TYPES_ARR } }, status: "ACTIVE" } },
-        },
-      ],
-    },
+  return prisma.gymMembership.count({
+    where: { status: "ACTIVE", plan: { name: { in: ACTIVE_TYPES_ARR } } },
   });
 }
 

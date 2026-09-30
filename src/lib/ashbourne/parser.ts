@@ -18,7 +18,15 @@ const HEADER_ALIASES: Record<keyof AshbourneMember, RegExp> = {
   clubInfoDate: /^club\s*info\s*date$/i,
   status: /^status$|^member\s*status$/i,
   membershipType: /^membership\s*type$|^mem\s*type$|^plan$/i,
-  expiryDate: /^expiry\s*date$|^expires?$|^renewal\s*date$/i,
+  // Ashbourne's "All Members" export uses "Expire Date", distinct from the
+  // "Expiry Date"/"Renewal Date" aliases from the older report guess.
+  expiryDate: /^expiry\s*date$|^expire\s*date$|^expires?$|^renewal\s*date$/i,
+  joinedDate: /^joined\s*date$/i,
+  lastPayDate: /^last\s*pay\s*date$/i,
+  periodPayment: /^period\s*payment$/i,
+  postcode: /^post\s*code$/i,
+  dob: /^dob$|^date\s*of\s*birth$/i,
+  address: /^address$/i,
 };
 
 /** Builds a column-index map from a header row — e.g. { memberNo: 0,
@@ -34,7 +42,14 @@ export function mapHeaders(headers: string[]): Partial<Record<keyof AshbourneMem
 
 /** Ashbourne dates are expected as dd/mm/yyyy (UK format, consistent with
  * the existing sales-report CSV import) — falls back to null for anything
- * that doesn't parse cleanly rather than guessing. */
+ * that doesn't parse cleanly rather than guessing.
+ *
+ * "Expire Date" in the All Members export uses "01/01/1900" as a sentinel
+ * for "no real end date" (rolling memberships with no fixed term) — a
+ * genuine 1900 date never occurs in a live gym's data, so any year before
+ * 1950 is treated as null rather than a real (and very wrong) expiry, which
+ * would otherwise make date-derived status logic mark an indefinite/rolling
+ * membership as EXPIRED. */
 function parseAshbourneDate(raw: string | undefined): Date | null {
   if (!raw) return null;
   const trimmed = raw.trim();
@@ -42,6 +57,7 @@ function parseAshbourneDate(raw: string | undefined): Date | null {
   const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (!m) return null;
   const [, dd, mm, yyyy] = m;
+  if (+yyyy < 1950) return null;
   const d = new Date(Date.UTC(+yyyy, +mm - 1, +dd));
   return Number.isNaN(d.getTime()) ? null : d;
 }
@@ -51,6 +67,15 @@ function cell(row: string[], map: Partial<Record<keyof AshbourneMember, number>>
   if (idx === undefined) return undefined;
   const v = row[idx]?.trim();
   return v ? v : undefined;
+}
+
+/** Ashbourne renders money as a plain decimal string ("40.9900") — falls
+ * back to null rather than 0 so "no payment amount in this row" is never
+ * confused with "a genuine £0 payment". */
+function parseAshbourneAmount(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : null;
 }
 
 /** Converts parsed table rows (header row already consumed) into
@@ -75,6 +100,12 @@ export function rowsToMembers(rows: string[][], headers: string[]): AshbourneMem
       status: cell(row, map, "status"),
       membershipType: cell(row, map, "membershipType"),
       expiryDate: parseAshbourneDate(cell(row, map, "expiryDate")),
+      joinedDate: parseAshbourneDate(cell(row, map, "joinedDate")),
+      lastPayDate: parseAshbourneDate(cell(row, map, "lastPayDate")),
+      periodPayment: parseAshbourneAmount(cell(row, map, "periodPayment")),
+      postcode: cell(row, map, "postcode"),
+      dob: parseAshbourneDate(cell(row, map, "dob")),
+      address: cell(row, map, "address"),
     });
   }
 

@@ -22,6 +22,13 @@ export type AshbourneConfig = {
   username: string;
   password: string;
   memberReportUrl: string;
+  /** The "All Members" report — the only one with Status/Membership
+   * Type/Expiry Date columns (memberReportUrl above lacks all three).
+   * Defaults to the standard report id (1) under baseUrl; overridable via
+   * ASHBOURNE_ALL_MEMBERS_REPORT_URL since this report's id is a Muscle
+   * Massacre / Ashbourne install detail, not something every gym using
+   * this CRM as a template is guaranteed to share. */
+  allMembersReportUrl: string;
   syncEnabled: boolean;
 };
 
@@ -45,12 +52,15 @@ export function getAshbourneConfig(): AshbourneConfig {
   if (!memberReportUrl) missing.push("ASHBOURNE_MEMBER_REPORT_URL");
   if (missing.length > 0) throw new AshbourneNotConfiguredError(missing);
 
+  const normalizedBaseUrl = baseUrl!.replace(/\/+$/, "");
+
   return {
-    baseUrl: baseUrl!.replace(/\/+$/, ""),
+    baseUrl: normalizedBaseUrl,
     clubId: clubId!,
     username: username!,
     password: password!,
     memberReportUrl: memberReportUrl!,
+    allMembersReportUrl: process.env.ASHBOURNE_ALL_MEMBERS_REPORT_URL || `${normalizedBaseUrl}/bi/dashboard/reports/reportmembership.aspx?id=1`,
     syncEnabled: parseBool(process.env.ASHBOURNE_SYNC_ENABLED, true),
   };
 }

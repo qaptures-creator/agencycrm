@@ -12,6 +12,14 @@ export type AshbourneMember = {
   status?: string;
   membershipType?: string;
   expiryDate?: Date | null;
+  // Added for the "All Members" CSV export (Phase 12) — the previously-
+  // wired "New Members" report never had these columns at all.
+  joinedDate?: Date | null;
+  lastPayDate?: Date | null;
+  periodPayment?: number | null;
+  postcode?: string;
+  dob?: Date | null;
+  address?: string;
 };
 
 export type AshbourneFetchResult = {
