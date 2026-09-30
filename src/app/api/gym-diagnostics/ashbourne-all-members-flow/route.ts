@@ -103,6 +103,14 @@ export async function GET(req: Request) {
   // set instead. ?destination=export selects it; default stays "view".
   const url = new URL(req.url);
   const destination = url.searchParams.get("destination") === "export" ? "export" : "view";
+  // Real breakthrough: EXPORT with just the "LIVE" status checked produced
+  // a genuine CSV with every column needed (Status, Mem Type, Expire Date,
+  // Joined date, ...). Before committing to 12 separate per-status runs,
+  // test whether checking every filter box gets the WHOLE roster in one
+  // file instead (the "select-all = no filter" failure mode seen on the
+  // VIEW DATA path might not apply here, since this path's own postback
+  // already proved "Filter Applied: YES" for a real single-value filter).
+  const selectAll = url.searchParams.get("selectAll") === "true";
 
   const trace: Record<string, unknown>[] = [];
 
@@ -157,21 +165,35 @@ export async function GET(req: Request) {
       // closeNav() directly would skip entirely. Test: check the box FIRST,
       // then click the real Apply button natively instead of evaluating
       // closeNav.
-      const checkboxState = await page.evaluate(() => {
+      const checkboxState = await page.evaluate((selectAllBoxes: boolean) => {
         const boxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
         const before = boxes.filter((c) => c.checked).length;
-        const target = boxes.find((b) => {
-          const label = b.closest("label")?.textContent?.trim() || document.querySelector(`label[for="${b.id}"]`)?.textContent?.trim() || "";
-          return label.toUpperCase() === "LIVE";
-        });
-        if (target && !target.checked) {
-          target.checked = true;
-          target.dispatchEvent(new Event("change", { bubbles: true }));
-          target.dispatchEvent(new Event("input", { bubbles: true }));
+        const check = (b: HTMLInputElement) => {
+          if (!b.checked) {
+            b.checked = true;
+            b.dispatchEvent(new Event("change", { bubbles: true }));
+            b.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        };
+        let targetFound = false;
+        let targetId: string | null = null;
+        if (selectAllBoxes) {
+          boxes.forEach(check);
+          targetFound = boxes.length > 0;
+        } else {
+          const target = boxes.find((b) => {
+            const label = b.closest("label")?.textContent?.trim() || document.querySelector(`label[for="${b.id}"]`)?.textContent?.trim() || "";
+            return label.toUpperCase() === "LIVE";
+          });
+          if (target) {
+            check(target);
+            targetFound = true;
+            targetId = target.id;
+          }
         }
         const after = boxes.filter((c) => c.checked).length;
-        return { total: boxes.length, checkedBefore: before, checkedAfter: after, targetFound: !!target, targetId: target?.id ?? null };
-      });
+        return { total: boxes.length, checkedBefore: before, checkedAfter: after, targetFound, targetId };
+      }, selectAll);
 
       const applyBtnDesc = await describeElement(page, "#ctl00_cpMain_btnApply");
       const applyResult = await nativeClick("#ctl00_cpMain_btnApply");
