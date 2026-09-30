@@ -264,7 +264,62 @@ export async function GET(req: Request) {
           await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
         }
 
-        if (downloadPromise) {
+        let exportScreenInfo: Record<string, unknown> | null = null;
+
+        // campaignexport.aspx turned out to be its own mini-wizard: choose a
+        // File Type (Excel/CSV vs Adobe/PDF), click "Export" (#btnRun) to
+        // generate the file, then click "DOWNLOAD" (#btnDownload) to
+        // actually trigger the browser download — the single Next click
+        // above only gets you to this page, not to a downloaded file.
+        if (destination === "export" && page.url().includes("campaignexport.aspx")) {
+          const fileTypeOptions = await page.evaluate(() => {
+            const radios = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
+            const selects = Array.from(document.querySelectorAll("select"));
+            return {
+              radios: radios.map((r) => ({
+                name: r.name,
+                value: r.value,
+                id: r.id,
+                checked: r.checked,
+                labelText: (r.closest("label")?.textContent || document.querySelector(`label[for="${r.id}"]`)?.textContent || "").trim(),
+              })),
+              selects: selects.map((s) => ({ id: s.id, name: s.name, options: Array.from(s.options).map((o) => o.text) })),
+            };
+          });
+
+          const excelOption = page.getByText(/excel\s*\/\s*csv/i).first();
+          let fileTypeResult = "not-found";
+          if ((await excelOption.count()) > 0) {
+            try {
+              await excelOption.evaluate((el) => (el as HTMLElement).click());
+              fileTypeResult = "clicked-label";
+            } catch (err) {
+              fileTypeResult = `threw: ${err instanceof Error ? err.message : String(err)}`;
+            }
+          }
+          await page.waitForTimeout(300);
+
+          const runResult = await nativeClick("#ctl00_cpMain_btnRun");
+          await page.waitForTimeout(1500);
+          const afterRunDesc = await describeElement(page, "#ctl00_cpMain_btnDownload");
+
+          const downloadPromise2 = page.waitForEvent("download", { timeout: 15000 }).catch(() => null);
+          const downloadClickResult = await nativeClick("#ctl00_cpMain_btnDownload");
+          const download = await downloadPromise2;
+          if (download) {
+            const suggestedFilename = download.suggestedFilename();
+            const savePath = `/tmp/ashbourne-export-${Date.now()}-${suggestedFilename}`;
+            await download.saveAs(savePath).catch(() => {});
+            const fs = await import("fs/promises");
+            const buf = await fs.readFile(savePath).catch(() => null);
+            const text = buf ? buf.toString("utf8").slice(0, 3000) : null;
+            downloadInfo = { suggestedFilename, savePath, byteLength: buf?.length ?? null, textPreview: text };
+          } else {
+            downloadInfo = { result: "no-download-event-after-download-click" };
+          }
+
+          exportScreenInfo = { fileTypeOptions, fileTypeResult, runResult, afterRunDesc, downloadClickResult };
+        } else if (downloadPromise) {
           const download = await downloadPromise;
           if (download) {
             const suggestedFilename = download.suggestedFilename();
@@ -285,6 +340,7 @@ export async function GET(req: Request) {
           modalOkResult,
           next2Result,
           downloadInfo,
+          exportScreenInfo,
           modalRadios,
           modalRadiosAfterClick,
           viewDataElementDesc,
