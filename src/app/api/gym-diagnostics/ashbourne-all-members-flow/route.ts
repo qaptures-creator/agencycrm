@@ -202,6 +202,30 @@ export async function GET(req: Request) {
       const viewDataLoc = page.getByText(/^view data$/i).first();
       const hasViewData = (await viewDataLoc.count()) > 0;
       if (hasViewData) {
+        // Before touching anything: dump every radio option in whatever
+        // modal/container "View Data" lives in — the New Members report's
+        // Report Destination modal has SMS/PUSH/EMAIL/EXPORT/VIEW
+        // DATA/E-Mail Template options, but the All Members report might
+        // expose a different set (or the text match might be landing on a
+        // different element entirely than the intended radio option),
+        // which would explain a "View Only" result instead of real data.
+        const modalRadios = await page.evaluate(() => {
+          const radios = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
+          return radios.map((r) => ({
+            name: r.name,
+            value: r.value,
+            id: r.id,
+            checked: r.checked,
+            labelText: (r.closest("label")?.textContent || document.querySelector(`label[for="${r.id}"]`)?.textContent || "").trim(),
+          }));
+        });
+        const viewDataElementDesc = await viewDataLoc
+          .evaluate((el) => {
+            const rect = el.getBoundingClientRect();
+            return JSON.stringify({ tag: el.tagName.toLowerCase(), outerHTML: el.outerHTML.slice(0, 300), rect: { x: rect.x, y: rect.y } });
+          })
+          .catch((err) => `evaluate-threw: ${err instanceof Error ? err.message : String(err)}`);
+
         let viewDataResult = "not-found";
         try {
           await viewDataLoc.evaluate((el) => (el as HTMLElement).click());
@@ -209,6 +233,12 @@ export async function GET(req: Request) {
         } catch (err) {
           viewDataResult = `threw: ${err instanceof Error ? err.message : String(err)}`;
         }
+        await page.waitForTimeout(300);
+        const modalRadiosAfterClick = await page.evaluate(() => {
+          const radios = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
+          return radios.map((r) => ({ name: r.name, value: r.value, id: r.id, checked: r.checked }));
+        });
+
         const modalOkResult = await nativeClickByText("button", /^OK$/);
         await page.waitForTimeout(800);
         const urlBeforeNext2 = page.url();
@@ -218,7 +248,15 @@ export async function GET(req: Request) {
         } catch {
           await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
         }
-        trace.push({ ...(await snapshot(page, "after-view-data-modal")), viewDataResult, modalOkResult, next2Result });
+        trace.push({
+          ...(await snapshot(page, "after-view-data-modal")),
+          viewDataResult,
+          modalOkResult,
+          next2Result,
+          modalRadios,
+          modalRadiosAfterClick,
+          viewDataElementDesc,
+        });
       }
 
       // Landed on campaignscreen.aspx ("... SUMMARY / Campaign Type: View
@@ -229,9 +267,35 @@ export async function GET(req: Request) {
       // input[type=submit]/button, now fixed — look again with a longer
       // settle time and click whatever proceed-shaped control exists.
       if (page.url().includes("campaignscreen.aspx") && !(await page.locator("#ctl00_cpMain_gvReport").count())) {
-        await page.waitForTimeout(1200);
+        // "Records Found:" showed up blank in attempt 7 even after a 1.2s
+        // settle — poll for up to 5s in case it's populated by an async
+        // postback rather than being present on initial render.
+        let recordsFoundText = "";
+        const pollDeadline = Date.now() + 5000;
+        while (Date.now() < pollDeadline) {
+          recordsFoundText = await page
+            .locator("body")
+            .innerText()
+            .then((t) => {
+              const m = t.match(/Records Found:\s*(\S*)/i);
+              return m ? m[1] : "";
+            })
+            .catch(() => "");
+          if (recordsFoundText) break;
+          await page.waitForTimeout(400);
+        }
+
+        // Dump the raw HTML of the main content area — if there's an error
+        // message, a hidden count, or something else useful, it'll be in
+        // here even if it's not part of the plain-text body content.
+        const mainContentHtml = await page
+          .locator("#ctl00_cpMain, .container, main")
+          .first()
+          .evaluate((el) => el.innerHTML.slice(0, 4000))
+          .catch((err) => `evaluate-threw: ${err instanceof Error ? err.message : String(err)}`);
+
         const summarySnapshot = await snapshot(page, "campaignscreen-summary");
-        trace.push(summarySnapshot);
+        trace.push({ ...summarySnapshot, recordsFoundText, mainContentHtml });
 
         const candidateLabels = [/^next$/i, /^run$/i, /^go$/i, /^view$/i, /^confirm$/i, /^continue$/i, /^generate$/i, /^submit$/i, /^ok$/i];
         for (const label of candidateLabels) {
