@@ -331,12 +331,20 @@ export async function fetchAshbourneAllMembersCsv(page: Page, cfg: AshbourneConf
   if (!page.url().includes("campaignexport.aspx")) {
     throw await withDebugScreenshot(page, "all-members-export-page-not-reached", `Expected to land on campaignexport.aspx but got ${page.url()}.`);
   }
+  // waitForFunction above resolves the instant window.location.href
+  // changes, which can be well before the new page's own DOM has actually
+  // rendered — give it a moment rather than checking for the select
+  // immediately on a URL that's only just started navigating.
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
+  await page.waitForTimeout(800);
 
   // --- Step: File Type = Excel/CSV (selectOption, not a DOM click — see
   // function doc), then Export -> Download ---
   const exportSelect = page.locator("#ctl00_cpMain_dlExport");
-  if ((await exportSelect.count()) === 0) {
-    throw await withDebugScreenshot(page, "all-members-filetype-select-not-found", "Could not find the File Type dropdown (#ctl00_cpMain_dlExport) on the export page.");
+  try {
+    await exportSelect.waitFor({ state: "attached", timeout: 10_000 });
+  } catch {
+    throw await withDebugScreenshot(page, "all-members-filetype-select-not-found", `Could not find the File Type dropdown (#ctl00_cpMain_dlExport) on the export page (${page.url()}).`);
   }
   await exportSelect.selectOption({ label: "Excel/CSV" });
   await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
