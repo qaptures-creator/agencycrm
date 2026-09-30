@@ -287,17 +287,32 @@ export async function GET(req: Request) {
             };
           });
 
-          const excelOption = page.getByText(/excel\s*\/\s*csv/i).first();
+          // The downloaded "file" from the first attempt turned out to be
+          // the same page's HTML re-rendered, not a real export — because
+          // clicking the visible "Excel/CSV" <option> text doesn't actually
+          // select it in a headless browser (native <select> dropdowns are
+          // OS-level popups; a raw DOM click on the <option> element doesn't
+          // reliably update .value or fire change the way a real user
+          // interaction would). Use selectOption() instead, which drives
+          // the underlying <select> correctly.
           let fileTypeResult = "not-found";
-          if ((await excelOption.count()) > 0) {
+          const exportSelect = page.locator("#ctl00_cpMain_dlExport");
+          if ((await exportSelect.count()) > 0) {
             try {
-              await excelOption.evaluate((el) => (el as HTMLElement).click());
-              fileTypeResult = "clicked-label";
+              await exportSelect.selectOption({ label: "Excel/CSV" });
+              fileTypeResult = "selected-excel-csv";
             } catch (err) {
               fileTypeResult = `threw: ${err instanceof Error ? err.message : String(err)}`;
             }
           }
-          await page.waitForTimeout(300);
+          const fileTypeAfter = await exportSelect
+            .evaluate((el) => ({ value: (el as HTMLSelectElement).value, selectedText: (el as HTMLSelectElement).selectedOptions[0]?.text }))
+            .catch(() => null);
+          // ASP.NET dropdowns often have AutoPostBack — give any partial
+          // postback triggered by the selection itself time to settle
+          // before touching Export/Download.
+          await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+          await page.waitForTimeout(500);
 
           const runResult = await nativeClick("#ctl00_cpMain_btnRun");
           await page.waitForTimeout(1500);
@@ -318,7 +333,7 @@ export async function GET(req: Request) {
             downloadInfo = { result: "no-download-event-after-download-click" };
           }
 
-          exportScreenInfo = { fileTypeOptions, fileTypeResult, runResult, afterRunDesc, downloadClickResult };
+          exportScreenInfo = { fileTypeOptions, fileTypeResult, fileTypeAfter, runResult, afterRunDesc, downloadClickResult };
         } else if (downloadPromise) {
           const download = await downloadPromise;
           if (download) {
