@@ -93,6 +93,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
+  // Breakthrough (attempt 11): the real Apply click finally produced a live
+  // results grid — but it only exposes 5 columns (Member No, First Name,
+  // Surname, Mobile, Email), no Status/Membership Type/Expiry Date, despite
+  // those being the exact filter used. Before concluding that's a hard
+  // ceiling, test whether the EXPORT destination (the other radio option in
+  // the same modal, described on the report category page as a "Full
+  // membership report") produces a downloadable file with a fuller column
+  // set instead. ?destination=export selects it; default stays "view".
+  const url = new URL(req.url);
+  const destination = url.searchParams.get("destination") === "export" ? "export" : "view";
+
   const trace: Record<string, unknown>[] = [];
 
   try {
@@ -196,10 +207,16 @@ export async function GET(req: Request) {
 
       // If that revealed a Report Destination-style modal (mirroring the
       // New Members report's Campaign -> VIEW DATA -> OK -> Next), repeat
-      // the same native-click approach through it.
-      const viewDataLoc = page.getByText(/^view data$/i).first();
+      // the same native-click approach through it. destination=export picks
+      // the EXPORT radio instead of VIEW DATA, and a download listener is
+      // armed around the whole sequence in case EXPORT triggers a file
+      // download rather than another confirmation page.
+      const destinationLabel = destination === "export" ? /^export$/i : /^view data$/i;
+      const viewDataLoc = page.getByText(destinationLabel).first();
       const hasViewData = (await viewDataLoc.count()) > 0;
+      let downloadInfo: Record<string, unknown> | null = null;
       if (hasViewData) {
+        const downloadPromise = destination === "export" ? page.waitForEvent("download", { timeout: 15000 }).catch(() => null) : null;
         // Before touching anything: dump every radio option in whatever
         // modal/container "View Data" lives in — the New Members report's
         // Report Destination modal has SMS/PUSH/EMAIL/EXPORT/VIEW
@@ -246,11 +263,28 @@ export async function GET(req: Request) {
         } catch {
           await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
         }
+
+        if (downloadPromise) {
+          const download = await downloadPromise;
+          if (download) {
+            const suggestedFilename = download.suggestedFilename();
+            const savePath = `/tmp/ashbourne-export-${Date.now()}-${suggestedFilename}`;
+            await download.saveAs(savePath).catch(() => {});
+            const fs = await import("fs/promises");
+            const buf = await fs.readFile(savePath).catch(() => null);
+            const text = buf ? buf.toString("utf8").slice(0, 3000) : null;
+            downloadInfo = { suggestedFilename, savePath, byteLength: buf?.length ?? null, textPreview: text };
+          } else {
+            downloadInfo = { result: "no-download-event-within-timeout" };
+          }
+        }
+
         trace.push({
           ...(await snapshot(page, "after-view-data-modal")),
           viewDataResult,
           modalOkResult,
           next2Result,
+          downloadInfo,
           modalRadios,
           modalRadiosAfterClick,
           viewDataElementDesc,
