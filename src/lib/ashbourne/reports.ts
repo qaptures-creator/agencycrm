@@ -246,6 +246,12 @@ async function nativeClick(page: Page, selector: string): Promise<boolean> {
 export async function fetchAshbourneAllMembersCsv(page: Page, cfg: AshbourneConfig): Promise<AshbourneFetchResult> {
   const reportUrl = cfg.allMembersReportUrl;
 
+  // Every successful run of this flow during the original investigation set
+  // a real desktop viewport before navigating — the default Playwright
+  // context viewport (1280x720) is small enough that this report's filter
+  // panel may not render its checkboxes into the DOM at all.
+  await page.setViewportSize({ width: 1920, height: 1080 });
+
   try {
     await page.goto(reportUrl, { waitUntil: "domcontentloaded" });
   } catch (err) {
