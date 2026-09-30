@@ -171,6 +171,19 @@ export async function GET(req: Request) {
 
       const nextBtnDesc = await describeElement(page, "#ctl00_cpMain_btnNext");
       const urlBeforeNext = page.url();
+
+      // The dead-end "View Only ALL MEMBERS SUMMARY" confirmation page with
+      // a blank "Records Found:" count and only a "Home" button smells like
+      // a "View Data"-style action that opens its real results in a new
+      // browser tab/popup rather than rendering inline (a common pattern for
+      // enterprise reporting UIs, and one nothing here has watched for yet).
+      // Listen for any new page opened on this context around the Next
+      // click and every subsequent click below.
+      const popups: Page[] = [];
+      const context = page.context();
+      const onNewPage = (p: Page) => popups.push(p);
+      context.on("page", onNewPage);
+
       const nextResult =
         (await page.locator("#ctl00_cpMain_btnNext").count()) > 0
           ? await nativeClick("#ctl00_cpMain_btnNext")
@@ -180,7 +193,8 @@ export async function GET(req: Request) {
       } catch {
         await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
       }
-      trace.push({ ...(await snapshot(page, "after-next")), nextResult, nextBtnDesc, checkboxState });
+      await page.waitForTimeout(500); // let any popup actually open before we check
+      trace.push({ ...(await snapshot(page, "after-next")), nextResult, nextBtnDesc, checkboxState, popupCountSoFar: popups.length });
 
       // If that revealed a Report Destination-style modal (mirroring the
       // New Members report's Campaign -> VIEW DATA -> OK -> Next), repeat
@@ -241,6 +255,25 @@ export async function GET(req: Request) {
           }
         }
       }
+
+      // Final check: did any of the clicks above open a new tab/popup? Give
+      // it a moment to finish navigating, then snapshot every popup page
+      // (best-effort — a popup can be a plain new tab of the same origin, a
+      // report-viewer iframe host page, or even a file download that never
+      // finishes loading as a normal page).
+      await page.waitForTimeout(1500);
+      context.off("page", onNewPage);
+      const popupSnapshots: Record<string, unknown>[] = [];
+      for (let i = 0; i < popups.length; i++) {
+        const popup = popups[i];
+        try {
+          await popup.waitForLoadState("domcontentloaded", { timeout: 8000 }).catch(() => {});
+          popupSnapshots.push({ index: i, ...(await snapshot(popup, `popup-${i}`)) });
+        } catch (err) {
+          popupSnapshots.push({ index: i, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+      trace.push({ label: "popup-check", popupCount: popups.length, popupSnapshots });
     });
 
     return NextResponse.json({ trace });
