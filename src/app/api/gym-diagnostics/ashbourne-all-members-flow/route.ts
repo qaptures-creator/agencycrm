@@ -148,25 +148,28 @@ export async function GET(req: Request) {
         }
       }
 
-      // The Next button is correctly positioned/visible and the click
-      // dispatches with zero error, yet the page never changes — the
-      // classic signature of client-side validation silently blocking
-      // submission. Most likely cause: none of the Status/Membership Type
-      // checkboxes are actually checked, even though they're visible in
-      // the list (a visible option is not the same as a selected one).
-      // Check them all before touching Next.
+      // Attempt 7/8 proved checking all 22 boxes reaches a genuinely empty
+      // "View Only" summary page server-side (lblRecordsFound and the
+      // results UpdatePanel both render completely empty) with "Filter
+      // Applied: NOT FILTERED" — meaning the server may treat "everything
+      // selected" as equivalent to "nothing selected" and skip running the
+      // report entirely as a safety measure against an unbounded query.
+      // Test that theory: check exactly ONE Status checkbox ("LIVE") this
+      // time instead of all of them, so the server sees a real filter.
       const checkboxState = await page.evaluate(() => {
         const boxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
         const before = boxes.filter((c) => c.checked).length;
-        for (const box of boxes) {
-          if (!box.checked) {
-            box.checked = true;
-            box.dispatchEvent(new Event("change", { bubbles: true }));
-            box.dispatchEvent(new Event("input", { bubbles: true }));
-          }
+        const target = boxes.find((b) => {
+          const label = b.closest("label")?.textContent?.trim() || document.querySelector(`label[for="${b.id}"]`)?.textContent?.trim() || "";
+          return label.toUpperCase() === "LIVE";
+        });
+        if (target && !target.checked) {
+          target.checked = true;
+          target.dispatchEvent(new Event("change", { bubbles: true }));
+          target.dispatchEvent(new Event("input", { bubbles: true }));
         }
         const after = boxes.filter((c) => c.checked).length;
-        return { total: boxes.length, checkedBefore: before, checkedAfter: after };
+        return { total: boxes.length, checkedBefore: before, checkedAfter: after, targetFound: !!target, targetId: target?.id ?? null };
       });
 
       const nextBtnDesc = await describeElement(page, "#ctl00_cpMain_btnNext");
