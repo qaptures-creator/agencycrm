@@ -110,22 +110,6 @@ export async function GET(req: Request) {
       await page.waitForTimeout(1200);
       trace.push(await snapshot(page, "loaded-report-page"));
 
-      const closeBtnBefore = await describeElement(page, '[onclick*="closeNav"]');
-
-      const closePanelResult = await page
-        .evaluate(() => {
-          const w = window as unknown as { closeNav?: (id: string) => void };
-          if (typeof w.closeNav === "function") {
-            w.closeNav("filterPanel");
-            return "called";
-          }
-          return "closeNav-not-a-function";
-        })
-        .catch((err) => `evaluate-threw: ${err instanceof Error ? err.message : String(err)}`);
-      await page.waitForTimeout(800);
-      const closeBtnAfter = await describeElement(page, '[onclick*="closeNav"]');
-      trace.push({ ...(await snapshot(page, "after-close-panel")), closePanelResult, closeBtnBefore, closeBtnAfter });
-
       async function nativeClick(selector: string): Promise<string> {
         const loc = page.locator(selector).first();
         if ((await loc.count()) === 0) return "not-found";
@@ -148,14 +132,20 @@ export async function GET(req: Request) {
         }
       }
 
-      // Attempt 7/8 proved checking all 22 boxes reaches a genuinely empty
-      // "View Only" summary page server-side (lblRecordsFound and the
-      // results UpdatePanel both render completely empty) with "Filter
-      // Applied: NOT FILTERED" — meaning the server may treat "everything
-      // selected" as equivalent to "nothing selected" and skip running the
-      // report entirely as a safety measure against an unbounded query.
-      // Test that theory: check exactly ONE Status checkbox ("LIVE") this
-      // time instead of all of them, so the server sees a real filter.
+      // Attempt 9 proved checking exactly one Status checkbox ("LIVE")
+      // instead of all 22 still reaches the same genuinely empty "View
+      // Only" summary page server-side — the "select-all = no filter"
+      // theory is dead. New theory: every attempt so far has closed the
+      // filter panel by calling window.closeNav('filterPanel') directly
+      // via evaluate() — never by actually clicking the real "Apply"
+      // button. Apply's onclick attribute is the literal same string
+      // ("closeNav('filterPanel');") as the × close button, but Apply
+      // could still have an ADDITIONAL listener bound via
+      // addEventListener/jQuery (invisible in the onclick attribute) that
+      // saves the selected filter state server-side — something calling
+      // closeNav() directly would skip entirely. Test: check the box FIRST,
+      // then click the real Apply button natively instead of evaluating
+      // closeNav.
       const checkboxState = await page.evaluate(() => {
         const boxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
         const before = boxes.filter((c) => c.checked).length;
@@ -171,6 +161,11 @@ export async function GET(req: Request) {
         const after = boxes.filter((c) => c.checked).length;
         return { total: boxes.length, checkedBefore: before, checkedAfter: after, targetFound: !!target, targetId: target?.id ?? null };
       });
+
+      const applyBtnDesc = await describeElement(page, "#ctl00_cpMain_btnApply");
+      const applyResult = await nativeClick("#ctl00_cpMain_btnApply");
+      await page.waitForTimeout(800);
+      trace.push({ ...(await snapshot(page, "after-apply")), applyResult, applyBtnDesc, checkboxState });
 
       const nextBtnDesc = await describeElement(page, "#ctl00_cpMain_btnNext");
       const urlBeforeNext = page.url();
