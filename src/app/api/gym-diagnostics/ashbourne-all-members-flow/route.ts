@@ -39,6 +39,11 @@ async function snapshot(page: Page, label: string) {
 
   const viewport = page.viewportSize();
 
+  const checkboxes = await page.locator('input[type="checkbox"]').evaluateAll((els) => {
+    const list = els as HTMLInputElement[];
+    return { total: list.length, checked: list.filter((c) => c.checked).length };
+  });
+
   let gridHeaders: string[] | null = null;
   const gridLocator = page.locator("#ctl00_cpMain_gvReport");
   if ((await gridLocator.count()) > 0) {
@@ -46,7 +51,7 @@ async function snapshot(page: Page, label: string) {
     gridHeaders = headerCells.map((h) => h.trim());
   }
 
-  return { label, url, viewport, buttons: uniqueButtons, iframeSrcs, bodyText, gridHeaders };
+  return { label, url, viewport, buttons: uniqueButtons, iframeSrcs, checkboxes, bodyText, gridHeaders };
 }
 
 /** outerHTML (truncated) of the first element matching a selector — for
@@ -138,6 +143,27 @@ export async function GET(req: Request) {
         }
       }
 
+      // The Next button is correctly positioned/visible and the click
+      // dispatches with zero error, yet the page never changes — the
+      // classic signature of client-side validation silently blocking
+      // submission. Most likely cause: none of the Status/Membership Type
+      // checkboxes are actually checked, even though they're visible in
+      // the list (a visible option is not the same as a selected one).
+      // Check them all before touching Next.
+      const checkboxState = await page.evaluate(() => {
+        const boxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+        const before = boxes.filter((c) => c.checked).length;
+        for (const box of boxes) {
+          if (!box.checked) {
+            box.checked = true;
+            box.dispatchEvent(new Event("change", { bubbles: true }));
+            box.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }
+        const after = boxes.filter((c) => c.checked).length;
+        return { total: boxes.length, checkedBefore: before, checkedAfter: after };
+      });
+
       const nextBtnDesc = await describeElement(page, "#ctl00_cpMain_btnNext");
       const urlBeforeNext = page.url();
       const nextResult =
@@ -149,7 +175,7 @@ export async function GET(req: Request) {
       } catch {
         await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
       }
-      trace.push({ ...(await snapshot(page, "after-next")), nextResult, nextBtnDesc });
+      trace.push({ ...(await snapshot(page, "after-next")), nextResult, nextBtnDesc, checkboxState });
 
       // If that revealed a Report Destination-style modal (mirroring the
       // New Members report's Campaign -> VIEW DATA -> OK -> Next), repeat
