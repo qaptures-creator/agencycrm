@@ -54,13 +54,20 @@ export function getAshbourneConfig(): AshbourneConfig {
 
   const normalizedBaseUrl = baseUrl!.replace(/\/+$/, "");
 
+  // ASHBOURNE_BASE_URL is the login page URL, not a bare origin — it
+  // includes a path (e.g. ".../bi/default.aspx"), confirmed via the
+  // Ashbourne Sync panel's own env summary. Appending another path onto it
+  // directly would produce an invalid double-pathed URL, so the origin
+  // (protocol + host only) is extracted first.
+  const origin = new URL(normalizedBaseUrl).origin;
+
   return {
     baseUrl: normalizedBaseUrl,
     clubId: clubId!,
     username: username!,
     password: password!,
     memberReportUrl: memberReportUrl!,
-    allMembersReportUrl: process.env.ASHBOURNE_ALL_MEMBERS_REPORT_URL || `${normalizedBaseUrl}/bi/dashboard/reports/reportmembership.aspx?id=1`,
+    allMembersReportUrl: process.env.ASHBOURNE_ALL_MEMBERS_REPORT_URL || `${origin}/bi/dashboard/reports/reportmembership.aspx?id=1`,
     syncEnabled: parseBool(process.env.ASHBOURNE_SYNC_ENABLED, true),
   };
 }

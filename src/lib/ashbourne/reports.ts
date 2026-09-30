@@ -272,7 +272,11 @@ export async function fetchAshbourneAllMembersCsv(page: Page, cfg: AshbourneConf
     return boxes.length;
   });
   if (checkboxCount === 0) {
-    throw await withDebugScreenshot(page, "all-members-checkboxes-not-found", "Could not find the Status/Membership Type filter checkboxes on the All Members report page — the page layout may have changed.");
+    throw await withDebugScreenshot(
+      page,
+      "all-members-checkboxes-not-found",
+      `Could not find the Status/Membership Type filter checkboxes on the All Members report page — the page layout may have changed, or navigation landed somewhere unexpected. Requested: ${reportUrl}. Actual: ${page.url()}.`
+    );
   }
 
   // --- Step: real Apply click (see function doc — not closeNav()) ---
