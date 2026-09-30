@@ -287,15 +287,29 @@ export async function GET(req: Request) {
 
         // Dump the raw HTML of the main content area — if there's an error
         // message, a hidden count, or something else useful, it'll be in
-        // here even if it's not part of the plain-text body content.
+        // here even if it's not part of the plain-text body content. The
+        // 4000-char version cut off right after "Filter Applied", before
+        // ever reaching "Records Found" — this report might also use a
+        // different grid element ID than #ctl00_cpMain_gvReport (which
+        // belongs to the New Members report specifically), so also scan
+        // for ANY table/grid-shaped element on the page regardless of id.
         const mainContentHtml = await page
           .locator("#ctl00_cpMain, .container, main")
           .first()
-          .evaluate((el) => el.innerHTML.slice(0, 4000))
+          .evaluate((el) => el.innerHTML.slice(0, 12000))
           .catch((err) => `evaluate-threw: ${err instanceof Error ? err.message : String(err)}`);
 
+        const anyTables = await page.locator("table").evaluateAll((tables) =>
+          tables.map((t) => ({
+            id: t.id || null,
+            className: t.className || null,
+            rowCount: t.querySelectorAll("tr").length,
+            firstRowText: t.querySelector("tr")?.textContent?.trim().slice(0, 200) || "",
+          }))
+        );
+
         const summarySnapshot = await snapshot(page, "campaignscreen-summary");
-        trace.push({ ...summarySnapshot, recordsFoundText, mainContentHtml });
+        trace.push({ ...summarySnapshot, recordsFoundText, mainContentHtml, anyTables });
 
         const candidateLabels = [/^next$/i, /^run$/i, /^go$/i, /^view$/i, /^confirm$/i, /^continue$/i, /^generate$/i, /^submit$/i, /^ok$/i];
         for (const label of candidateLabels) {
