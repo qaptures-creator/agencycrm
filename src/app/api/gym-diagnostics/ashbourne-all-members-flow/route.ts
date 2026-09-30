@@ -10,13 +10,18 @@ const ALL_MEMBERS_REPORT_URL = "https://secure.ashbournemanagement.co.uk/bi/dash
 
 async function snapshot(page: Page, label: string) {
   const url = page.url();
+  // Blind spot found in earlier attempts: this selector never matched
+  // input[type=submit]/input[type=button] — which is exactly what the
+  // real working "Next" control turned out to be. text/value both checked
+  // since a submit input's visible label is its `value` attribute, not
+  // textContent.
   const buttons = await page
-    .locator('button, a, [onclick], [role="button"]')
+    .locator('button, a, input[type="submit"], input[type="button"], [onclick], [role="button"]')
     .evaluateAll((els) =>
       els
         .map((el) => ({
           tag: el.tagName.toLowerCase(),
-          text: el.textContent?.trim().slice(0, 60) ?? "",
+          text: (el.textContent?.trim() || (el as HTMLInputElement).value || "").slice(0, 60),
           onclick: el.getAttribute("onclick"),
           id: el.id || null,
         }))
@@ -32,7 +37,7 @@ async function snapshot(page: Page, label: string) {
   const bodyText = await page
     .locator("body")
     .innerText()
-    .then((t) => t.replace(/\s+/g, " ").trim().slice(0, 1500))
+    .then((t) => t.replace(/\s+/g, " ").trim().slice(0, 3000))
     .catch(() => "");
 
   const iframeSrcs = await page.locator("iframe").evaluateAll((els) => els.map((el) => (el as HTMLIFrameElement).src || "(no src)"));
@@ -200,6 +205,41 @@ export async function GET(req: Request) {
           await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
         }
         trace.push({ ...(await snapshot(page, "after-view-data-modal")), viewDataResult, modalOkResult, next2Result });
+      }
+
+      // Landed on campaignscreen.aspx ("... SUMMARY / Campaign Type: View
+      // Only / Filter Applied: NOT FILTERED / Records Found: ...") — the
+      // same URL the working New Members report's real grid lives on, but
+      // this looks like an intermediate confirmation step, not the grid
+      // itself. The previous buttons scan had a blind spot for
+      // input[type=submit]/button, now fixed — look again with a longer
+      // settle time and click whatever proceed-shaped control exists.
+      if (page.url().includes("campaignscreen.aspx") && !(await page.locator("#ctl00_cpMain_gvReport").count())) {
+        await page.waitForTimeout(1200);
+        const summarySnapshot = await snapshot(page, "campaignscreen-summary");
+        trace.push(summarySnapshot);
+
+        const candidateLabels = [/^next$/i, /^run$/i, /^go$/i, /^view$/i, /^confirm$/i, /^continue$/i, /^generate$/i, /^submit$/i, /^ok$/i];
+        for (const label of candidateLabels) {
+          const loc = page.locator('button, a, input[type="submit"], input[type="button"]').filter({ hasText: label }).first();
+          if ((await loc.count()) > 0) {
+            const urlBefore3 = page.url();
+            let clickResult = "not-found";
+            try {
+              await loc.evaluate((el) => (el as HTMLElement).click());
+              clickResult = "clicked";
+            } catch (err) {
+              clickResult = `threw: ${err instanceof Error ? err.message : String(err)}`;
+            }
+            try {
+              await page.waitForFunction((prev) => window.location.href !== prev, urlBefore3, { timeout: 8000 });
+            } catch {
+              await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+            }
+            trace.push({ ...(await snapshot(page, `after-summary-click-${label.source}`)), clickResult });
+            break;
+          }
+        }
       }
     });
 
