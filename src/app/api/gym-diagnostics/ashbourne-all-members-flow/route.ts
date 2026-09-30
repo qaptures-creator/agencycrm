@@ -35,6 +35,10 @@ async function snapshot(page: Page, label: string) {
     .then((t) => t.replace(/\s+/g, " ").trim().slice(0, 1500))
     .catch(() => "");
 
+  const iframeSrcs = await page.locator("iframe").evaluateAll((els) => els.map((el) => (el as HTMLIFrameElement).src || "(no src)"));
+
+  const viewport = page.viewportSize();
+
   let gridHeaders: string[] | null = null;
   const gridLocator = page.locator("#ctl00_cpMain_gvReport");
   if ((await gridLocator.count()) > 0) {
@@ -42,7 +46,27 @@ async function snapshot(page: Page, label: string) {
     gridHeaders = headerCells.map((h) => h.trim());
   }
 
-  return { label, url, buttons: uniqueButtons, bodyText, gridHeaders };
+  return { label, url, viewport, buttons: uniqueButtons, iframeSrcs, bodyText, gridHeaders };
+}
+
+/** outerHTML (truncated) of the first element matching a selector — for
+ * confirming a "clicked successfully, nothing happened" result isn't
+ * secretly landing on a decoy/hidden duplicate. */
+async function describeElement(page: Page, selector: string): Promise<string | null> {
+  const loc = page.locator(selector).first();
+  if ((await loc.count()) === 0) return null;
+  return loc
+    .evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      return JSON.stringify({
+        outerHTML: el.outerHTML.slice(0, 300),
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        display: style.display,
+        visibility: style.visibility,
+      });
+    })
+    .catch((err) => `evaluate-threw: ${err instanceof Error ? err.message : String(err)}`);
 }
 
 /** TEMPORARY — read-only against Ashbourne (navigates + clicks buttons
@@ -65,19 +89,19 @@ export async function GET(req: Request) {
     await withAshbourneBrowser(async (page, cfg) => {
       await loginToAshbourne(page, cfg);
 
+      // Three prior attempts all failed on interaction mechanics, and the
+      // 2nd's error was literally "outside of the viewport" — Playwright's
+      // default context viewport is 1280x720, which may just be too small
+      // for this dashboard's off-canvas panel positioning. Try a real
+      // desktop size before anything else.
+      await page.setViewportSize({ width: 1920, height: 1080 });
+
       await page.goto(ALL_MEMBERS_REPORT_URL, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(1200);
       trace.push(await snapshot(page, "loaded-report-page"));
 
-      // Two prior attempts both failed on Playwright's mouse-coordinate
-      // click mechanics (first the wrong element, a not-yet-open modal;
-      // then "outside of the viewport" on the × — the off-canvas panel is
-      // apparently positioned somewhere Playwright's synthetic mouse can't
-      // reach even after scrolling). Sidestepping all of that: call the
-      // panel's own onclick handler directly via evaluate (native JS call,
-      // no mouse/viewport involved at all), and use native DOM .click()
-      // (element.click(), not Playwright's mouse simulation) for every
-      // subsequent step for the same reason.
+      const closeBtnBefore = await describeElement(page, '[onclick*="closeNav"]');
+
       const closePanelResult = await page
         .evaluate(() => {
           const w = window as unknown as { closeNav?: (id: string) => void };
@@ -89,7 +113,8 @@ export async function GET(req: Request) {
         })
         .catch((err) => `evaluate-threw: ${err instanceof Error ? err.message : String(err)}`);
       await page.waitForTimeout(800);
-      trace.push({ ...(await snapshot(page, "after-close-panel")), closePanelResult });
+      const closeBtnAfter = await describeElement(page, '[onclick*="closeNav"]');
+      trace.push({ ...(await snapshot(page, "after-close-panel")), closePanelResult, closeBtnBefore, closeBtnAfter });
 
       async function nativeClick(selector: string): Promise<string> {
         const loc = page.locator(selector).first();
@@ -113,6 +138,7 @@ export async function GET(req: Request) {
         }
       }
 
+      const nextBtnDesc = await describeElement(page, "#ctl00_cpMain_btnNext");
       const urlBeforeNext = page.url();
       const nextResult =
         (await page.locator("#ctl00_cpMain_btnNext").count()) > 0
@@ -123,7 +149,7 @@ export async function GET(req: Request) {
       } catch {
         await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
       }
-      trace.push({ ...(await snapshot(page, "after-next")), nextResult });
+      trace.push({ ...(await snapshot(page, "after-next")), nextResult, nextBtnDesc });
 
       // If that revealed a Report Destination-style modal (mirroring the
       // New Members report's Campaign -> VIEW DATA -> OK -> Next), repeat
