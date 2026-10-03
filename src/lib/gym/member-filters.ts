@@ -155,6 +155,33 @@ type RawRow = {
   planName: string | null;
 };
 
+function mapRow(r: RawRow): MemberRow {
+  return {
+    id: r.id,
+    memberNumber: r.memberNumber,
+    fullName: r.fullName,
+    email: r.email,
+    phone: r.phone,
+    joinDate: r.joinDate.toISOString(),
+    lastVisitAt: r.lastVisitAt?.toISOString() ?? null,
+    membership: r.membershipId
+      ? {
+          planName: r.planName ?? "Unknown",
+          status: r.membershipStatus!,
+          paymentStatus: r.paymentStatus!,
+          renewalDate: r.renewalDate?.toISOString() ?? null,
+        }
+      : null,
+  };
+}
+
+const ROW_SELECT_SQL = Prisma.sql`
+  SELECT
+    m.id, m."memberNumber", m."fullName", m.email, m.phone, m."joinDate", m."lastVisitAt",
+    cur.id AS "membershipId", cur.status AS "membershipStatus", cur."paymentStatus" AS "paymentStatus",
+    cur."renewalDate" AS "renewalDate", plan.name AS "planName"
+`;
+
 export async function getFilteredMembers(filters: MemberListFilters): Promise<{ rows: MemberRow[]; total: number }> {
   const conditions = buildConditions(filters);
   const whereSql = conditions.length > 0 ? Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}` : Prisma.sql``;
@@ -164,10 +191,7 @@ export async function getFilteredMembers(filters: MemberListFilters): Promise<{ 
 
   const [rows, countResult] = await Promise.all([
     prisma.$queryRaw<RawRow[]>(Prisma.sql`
-      SELECT
-        m.id, m."memberNumber", m."fullName", m.email, m.phone, m."joinDate", m."lastVisitAt",
-        cur.id AS "membershipId", cur.status AS "membershipStatus", cur."paymentStatus" AS "paymentStatus",
-        cur."renewalDate" AS "renewalDate", plan.name AS "planName"
+      ${ROW_SELECT_SQL}
       ${MEMBER_JOIN_SQL}
       ${whereSql}
       ORDER BY ${orderBySql} ${dirSql} NULLS LAST, m.id ASC
@@ -180,24 +204,26 @@ export async function getFilteredMembers(filters: MemberListFilters): Promise<{ 
     `),
   ]);
 
-  return {
-    total: Number(countResult[0]?.count ?? 0),
-    rows: rows.map((r) => ({
-      id: r.id,
-      memberNumber: r.memberNumber,
-      fullName: r.fullName,
-      email: r.email,
-      phone: r.phone,
-      joinDate: r.joinDate.toISOString(),
-      lastVisitAt: r.lastVisitAt?.toISOString() ?? null,
-      membership: r.membershipId
-        ? {
-            planName: r.planName ?? "Unknown",
-            status: r.membershipStatus!,
-            paymentStatus: r.paymentStatus!,
-            renewalDate: r.renewalDate?.toISOString() ?? null,
-          }
-        : null,
-    })),
-  };
+  return { total: Number(countResult[0]?.count ?? 0), rows: rows.map(mapRow) };
+}
+
+/** Same filtering/sorting logic as getFilteredMembers, without pagination —
+ * for CSV export, which must cover every matching record, not just the
+ * current page. Shares buildConditions/MEMBER_JOIN_SQL/SORT_COLUMN_SQL with
+ * the paginated query above, so the export can never compute a different
+ * result set than what the Members page itself shows for the same filters. */
+export async function getAllFilteredMembers(filters: Omit<MemberListFilters, "page" | "pageSize">): Promise<MemberRow[]> {
+  const conditions = buildConditions(filters);
+  const whereSql = conditions.length > 0 ? Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}` : Prisma.sql``;
+  const orderBySql = SORT_COLUMN_SQL[filters.sort];
+  const dirSql = filters.dir === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+
+  const rows = await prisma.$queryRaw<RawRow[]>(Prisma.sql`
+    ${ROW_SELECT_SQL}
+    ${MEMBER_JOIN_SQL}
+    ${whereSql}
+    ORDER BY ${orderBySql} ${dirSql} NULLS LAST, m.id ASC
+  `);
+
+  return rows.map(mapRow);
 }

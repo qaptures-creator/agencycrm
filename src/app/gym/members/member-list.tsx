@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Plus, Users, Search, ArrowUp, ArrowDown, ChevronsUpDown, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Users, Search, ArrowUp, ArrowDown, ChevronsUpDown, Loader2, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -115,6 +115,19 @@ export function MemberList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
+  // Export always reflects the CURRENT filters/search/sort — page/pageSize
+  // deliberately excluded, since the export covers every matching record,
+  // not just the page on screen (server-side via getAllFilteredMembers,
+  // the same filter logic as the page query, not a client-side dump of
+  // the rows currently rendered).
+  const exportParams = new URLSearchParams();
+  if (filters.status !== "All") exportParams.set("status", filters.status);
+  if (filters.type) exportParams.set("type", filters.type);
+  if (filters.q) exportParams.set("q", filters.q);
+  exportParams.set("sort", filters.sort);
+  exportParams.set("dir", filters.dir);
+  const exportUrl = `/api/gym/members/export?${exportParams.toString()}`;
+
   function handleSort(key: MemberSortKey) {
     const dir = filters.sort === key && filters.dir === "asc" ? "desc" : "asc";
     updateParams({ sort: key, dir });
@@ -143,6 +156,12 @@ export function MemberList({
           ))}
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5" asChild>
+            <a href={exportUrl} download>
+              <Download className="size-4" />
+              Export CSV
+            </a>
+          </Button>
           {canImport && <ImportSalesReportDialog />}
           <Button size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
             <Plus className="size-4" />
