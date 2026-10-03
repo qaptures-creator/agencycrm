@@ -53,6 +53,12 @@ export type SyncOutcome = {
   /** Only populated for dry runs — a small sample so staff can sanity-check
    * before approving a real sync, without dumping the entire dataset. */
   sample?: { action: "create" | "update" | "unchanged" | "review"; memberNo: string; name: string }[];
+  /** Split so a slow run can be diagnosed from the result alone — ashbourneMs
+   * is everything up to and including the CSV download (login, the report
+   * wizard, the file download itself — a third-party site's wizard, not
+   * something a code change here speeds up), dbMs is the matching/upsert
+   * loop against our own database (the part concurrency batching targets). */
+  timing?: { ashbourneMs: number; dbMs: number; totalMs: number };
 };
 
 function fullNameOf(m: AshbourneMember): string {
@@ -175,6 +181,8 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
     }
   }
 
+  const runStartedAt = Date.now();
+
   try {
     // One retry — the Ashbourne site itself has shown occasional transient
     // flakiness mid-flow (a client-side script that's supposed to re-enable
@@ -197,6 +205,9 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
         throw firstErr; // the original error is more informative than a second identical failure
       });
     }
+
+    const ashbourneMs = Date.now() - runStartedAt;
+    const dbStartedAt = Date.now();
 
     outcome.recordsFound = result.members.length;
 
@@ -371,6 +382,8 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
       await Promise.all(result.members.slice(i, i + CONCURRENCY).map(processRecord));
     }
 
+    const dbMs = Date.now() - dbStartedAt;
+    outcome.timing = { ashbourneMs, dbMs, totalMs: ashbourneMs + dbMs };
     outcome.success = true;
   } catch (err) {
     const message = err instanceof AshbourneConnectorError ? `[${err.step}] ${err.message}` : err instanceof Error ? err.message : "Unknown Ashbourne sync error";

@@ -40,6 +40,11 @@ function OutcomeSummary({ outcome }: { outcome: SyncOutcome }) {
           <span>Failed: <span className={cn("font-medium", outcome.failed > 0 ? "text-destructive" : "text-foreground")}>{outcome.failed}</span></span>
         </div>
       )}
+      {outcome.timing && (
+        <p className="border-t border-border pt-2 text-xs text-muted-foreground">
+          Took {(outcome.timing.totalMs / 1000).toFixed(1)}s — Ashbourne: {(outcome.timing.ashbourneMs / 1000).toFixed(1)}s, matching/saving: {(outcome.timing.dbMs / 1000).toFixed(1)}s
+        </p>
+      )}
       {outcome.sample && outcome.sample.length > 0 && (
         <div className="space-y-1 border-t border-border pt-2">
           <p className="text-xs font-medium text-muted-foreground">Sample ({outcome.sample.length} shown)</p>
