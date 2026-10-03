@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Users, Search, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Plus, Users, Search, ArrowUp, ArrowDown, ChevronsUpDown, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EntityDialog } from "@/components/entity-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
@@ -14,84 +15,29 @@ import { MEMBERSHIP_STATUSES, PAYMENT_STATUSES } from "@/lib/gym/constants";
 import { MemberForm } from "./member-form";
 import { ImportSalesReportDialog } from "./import-sales-report-dialog";
 import { formatDate, cn } from "@/lib/utils";
+import { MEMBER_STATUS_TABS, type MemberListFilters, type MemberRow, type MemberSortKey } from "@/lib/gym/member-filters-shared";
 
-export type MemberRow = {
-  id: string;
-  memberNumber: string;
-  fullName: string;
-  email: string | null;
-  phone: string | null;
-  joinDate: string;
-  lastVisitAt: string | null;
-  membership: {
-    planName: string;
-    status: string;
-    paymentStatus: string;
-    renewalDate: string | null;
-  } | null;
+const SORT_LABELS: Record<MemberSortKey, string> = {
+  name: "Member",
+  type: "Membership Type",
+  joinDate: "Join Date",
+  nextPayment: "Next Payment",
+  status: "Status",
+  payment: "Payment",
+  lastVisit: "Last Visit",
 };
 
-const TABS = [
-  "All",
-  "Active",
-  "Cancelled",
-  "Frozen",
-  "Expired",
-  "Payment Due",
-  "Failed Payment",
-  "New This Month",
-] as const;
-type Tab = (typeof TABS)[number];
-
-type SortKey = "name" | "type" | "joinDate" | "nextPayment" | "status" | "payment" | "lastVisit";
-type SortDir = "asc" | "desc";
-
-function sortValue(m: MemberRow, key: SortKey): string | number | null {
-  switch (key) {
-    case "name":
-      return m.fullName.toLowerCase();
-    case "type":
-      return m.membership?.planName?.toLowerCase() ?? null;
-    case "joinDate":
-      return new Date(m.joinDate).getTime();
-    case "nextPayment":
-      return m.membership?.renewalDate ? new Date(m.membership.renewalDate).getTime() : null;
-    case "status":
-      return m.membership?.status ?? null;
-    case "payment":
-      return m.membership?.paymentStatus ?? null;
-    case "lastVisit":
-      return m.lastVisitAt ? new Date(m.lastVisitAt).getTime() : null;
-  }
-}
-
-/** Nulls always sort last, regardless of direction — a missing value isn't
- * meaningfully "smallest" or "largest". */
-function compareRows(a: MemberRow, b: MemberRow, key: SortKey, dir: SortDir): number {
-  const av = sortValue(a, key);
-  const bv = sortValue(b, key);
-  if (av == null && bv == null) return 0;
-  if (av == null) return 1;
-  if (bv == null) return -1;
-  const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
-  return dir === "asc" ? cmp : -cmp;
-}
-
 function SortableHead({
-  label,
   sortKey,
-  activeKey,
-  dir,
+  filters,
   onSort,
 }: {
-  label: string;
-  sortKey: SortKey;
-  activeKey: SortKey | null;
-  dir: SortDir;
-  onSort: (key: SortKey) => void;
+  sortKey: MemberSortKey;
+  filters: MemberListFilters;
+  onSort: (key: MemberSortKey) => void;
 }) {
-  const active = activeKey === sortKey;
-  const Icon = active ? (dir === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
+  const active = filters.sort === sortKey;
+  const Icon = active ? (filters.dir === "asc" ? ArrowUp : ArrowDown) : ChevronsUpDown;
   return (
     <TableHead>
       <button
@@ -102,69 +48,94 @@ function SortableHead({
         }}
         className={cn("inline-flex items-center gap-1 transition-colors hover:text-foreground", active && "text-foreground")}
       >
-        {label}
+        {SORT_LABELS[sortKey]}
         <Icon className={cn("size-3.5", !active && "opacity-50")} />
       </button>
     </TableHead>
   );
 }
 
-export function MemberList({ members, canImport }: { members: MemberRow[]; canImport: boolean }) {
+export function MemberList({
+  members,
+  total,
+  filters,
+  membershipTypes,
+  canImport,
+}: {
+  members: MemberRow[];
+  total: number;
+  filters: MemberListFilters;
+  membershipTypes: string[];
+  canImport: boolean;
+}) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [tab, setTab] = React.useState<Tab>("All");
-  const [query, setQuery] = React.useState("");
-  const [sortKey, setSortKey] = React.useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = React.useState<SortDir>("asc");
+  const [isPending, startTransition] = React.useTransition();
+
+  // Local, immediately-responsive copy of the search box — debounced before
+  // it becomes a URL param / server query, so typing doesn't issue a
+  // database request on every keystroke.
+  const [searchInput, setSearchInput] = React.useState(filters.q);
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firstRender = React.useRef(true);
+
   const [dialogOpen, setDialogOpen] = React.useState(() => {
     const p = searchParams.get("new");
     return p === "1" || p === "note";
   });
 
-  function handleSort(key: SortKey) {
-    if (sortKey !== key) {
-      setSortKey(key);
-      setSortDir("asc");
-    } else if (sortDir === "asc") {
-      setSortDir("desc");
-    } else {
-      setSortKey(null); // third click clears back to the natural (server) order
+  function updateParams(updates: Record<string, string | null>, resetPage = true) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null) params.delete(key);
+      else params.set(key, value);
     }
+    if (resetPage) params.delete("page");
+    startTransition(() => {
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    });
   }
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  const filtered = members.filter((m) => {
-    if (tab === "Active" && m.membership?.status !== "ACTIVE") return false;
-    if (tab === "Cancelled" && m.membership?.status !== "CANCELLED") return false;
-    if (tab === "Frozen" && m.membership?.status !== "FROZEN") return false;
-    if (tab === "Expired" && m.membership?.status !== "EXPIRED") return false;
-    if (tab === "Payment Due" && m.membership?.paymentStatus !== "OVERDUE") return false;
-    if (tab === "Failed Payment" && m.membership?.paymentStatus !== "FAILED") return false;
-    if (tab === "New This Month" && new Date(m.joinDate) < monthStart) return false;
-
-    if (query.trim()) {
-      const q = query.trim().toLowerCase();
-      const haystack = [m.fullName, m.email, m.phone, m.memberNumber].filter(Boolean).join(" ").toLowerCase();
-      if (!haystack.includes(q)) return false;
+  // Debounced search — ~300ms after the user stops typing, push `q` to the
+  // URL (which re-runs the server query). Skipped on first render so
+  // loading the page doesn't immediately re-navigate to its own URL.
+  React.useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
     }
-    return true;
-  });
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      updateParams({ q: searchInput.trim() || null });
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
 
-  const sorted = sortKey ? [...filtered].sort((a, b) => compareRows(a, b, sortKey, sortDir)) : filtered;
+  function handleSort(key: MemberSortKey) {
+    const dir = filters.sort === key && filters.dir === "asc" ? "desc" : "asc";
+    updateParams({ sort: key, dir });
+  }
+
+  const pageSize = filters.pageSize;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const rangeStart = total === 0 ? 0 : (filters.page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(filters.page * pageSize, total);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1.5">
-          {TABS.map((t) => (
+          {MEMBER_STATUS_TABS.map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => updateParams({ status: t === "All" ? null : t })}
               className={cn(
                 "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                tab === t ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground"
+                filters.status === t ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground"
               )}
             >
               {t}
@@ -180,47 +151,67 @@ export function MemberList({ members, canImport }: { members: MemberRow[]; canIm
         </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search name, email, phone or member number…"
-          className="pl-8"
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search name, email, phone or member number…"
+            className="pl-8"
+          />
+        </div>
+
+        <div className="min-w-[180px]">
+          <Select value={filters.type ?? "ALL"} onValueChange={(v) => updateParams({ type: v === "ALL" ? null : v })}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Membership Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All membership types</SelectItem>
+              {membershipTypes.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {isPending && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
       </div>
 
       <p className="text-sm text-muted-foreground">
-        {filtered.length} member{filtered.length === 1 ? "" : "s"}
+        {total === 0 ? "0 members" : `${rangeStart}–${rangeEnd} of ${total} member${total === 1 ? "" : "s"}`}
       </p>
 
-      {filtered.length === 0 ? (
+      {members.length === 0 ? (
         <EmptyState
           icon={Users}
-          title={members.length === 0 ? "No members yet" : "No members match this filter"}
+          title={total === 0 && !filters.q && filters.status === "All" && !filters.type ? "No members yet" : "No members match this filter"}
           description={
-            members.length === 0
+            total === 0 && !filters.q && filters.status === "All" && !filters.type
               ? "Members are added here manually until Ashbourne is connected. Add your first member to get started."
-              : "Try a different tab or search term."
+              : "Try a different tab, membership type, or search term."
           }
         />
       ) : (
-        <div className="rounded-xl border border-border bg-card">
+        <div className={cn("rounded-xl border border-border bg-card transition-opacity", isPending && "opacity-60")}>
           <Table>
             <TableHeader>
               <TableRow>
-                <SortableHead label="Member" sortKey="name" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableHead sortKey="name" filters={filters} onSort={handleSort} />
                 <TableHead>Contact</TableHead>
-                <SortableHead label="Membership Type" sortKey="type" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortableHead label="Join Date" sortKey="joinDate" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortableHead label="Next Payment" sortKey="nextPayment" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortableHead label="Status" sortKey="status" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortableHead label="Payment" sortKey="payment" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortableHead label="Last Visit" sortKey="lastVisit" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+                <SortableHead sortKey="type" filters={filters} onSort={handleSort} />
+                <SortableHead sortKey="joinDate" filters={filters} onSort={handleSort} />
+                <SortableHead sortKey="nextPayment" filters={filters} onSort={handleSort} />
+                <SortableHead sortKey="status" filters={filters} onSort={handleSort} />
+                <SortableHead sortKey="payment" filters={filters} onSort={handleSort} />
+                <SortableHead sortKey="lastVisit" filters={filters} onSort={handleSort} />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.map((m) => (
+              {members.map((m) => (
                 <TableRow key={m.id} className="cursor-pointer" onClick={() => router.push(`/gym/members/${m.id}`)}>
                   <TableCell>
                     <div className="flex items-center gap-2.5">
@@ -248,6 +239,36 @@ export function MemberList({ members, canImport }: { members: MemberRow[]; canIm
               ))}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            Page {filters.page} of {totalPages}
+          </p>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              disabled={filters.page <= 1}
+              onClick={() => updateParams({ page: String(filters.page - 1) }, false)}
+            >
+              <ChevronLeft className="size-4" />
+              Prev
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              disabled={filters.page >= totalPages}
+              onClick={() => updateParams({ page: String(filters.page + 1) }, false)}
+            >
+              Next
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
         </div>
       )}
 

@@ -3,44 +3,23 @@ import { requireTabAccess } from "@/lib/gym/auth";
 import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { markNavSectionSeen } from "@/lib/gym/nav-badges";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { MemberList, type MemberRow } from "./member-list";
+import { parseMemberListFilters, getFilteredMembers, getDistinctMembershipTypes } from "@/lib/gym/member-filters";
+import { MemberList } from "./member-list";
 import { MemberMapView } from "./member-map-view";
 
-export default async function MembersPage() {
+export default async function MembersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requireTabAccess("/gym/members");
   const canImport = can(user.accessRole as GymAccessRole, "manageMemberships");
   markNavSectionSeen(user.id, "/gym/members");
 
-  const [membersRaw, plans] = await Promise.all([
-    prisma.gymMember.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        memberships: { orderBy: { startDate: "desc" }, take: 1, include: { plan: true } },
-      },
-    }),
+  const sp = await searchParams;
+  const filters = parseMemberListFilters(sp);
+
+  const [{ rows: members, total }, membershipTypes, plans] = await Promise.all([
+    getFilteredMembers(filters),
+    getDistinctMembershipTypes(),
     prisma.gymMembershipPlan.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
-
-  const members: MemberRow[] = membersRaw.map((m) => {
-    const membership = m.memberships[0] ?? null;
-    return {
-      id: m.id,
-      memberNumber: m.memberNumber,
-      fullName: m.fullName,
-      email: m.email,
-      phone: m.phone,
-      joinDate: m.joinDate.toISOString(),
-      lastVisitAt: m.lastVisitAt?.toISOString() ?? null,
-      membership: membership
-        ? {
-            planName: membership.plan.name,
-            status: membership.status,
-            paymentStatus: membership.paymentStatus,
-            renewalDate: membership.renewalDate?.toISOString() ?? null,
-          }
-        : null,
-    };
-  });
 
   return (
     <div className="space-y-6">
@@ -56,7 +35,7 @@ export default async function MembersPage() {
         </TabsList>
 
         <TabsContent value="list">
-          <MemberList members={members} canImport={canImport} />
+          <MemberList members={members} total={total} filters={filters} membershipTypes={membershipTypes} canImport={canImport} />
         </TabsContent>
 
         <TabsContent value="map">

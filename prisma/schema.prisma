@@ -576,6 +576,7 @@ model GymMember {
   @@index([geocodeStatus])
   @@index([placeName])
   @@index([ashbourneCardNumber])
+  @@index([joinDate])
 }
 
 model GymMemberNote {
@@ -606,6 +607,8 @@ model GymMembershipPlan {
   updatedAt            DateTime @updatedAt
 
   memberships GymMembership[]
+
+  @@index([name])
 }
 
 model GymMembership {
@@ -634,6 +637,8 @@ model GymMembership {
   @@index([memberId])
   @@index([planId])
   @@index([status])
+  @@index([startDate])
+  @@index([renewalDate])
 }
 
 model GymMembershipEvent {
