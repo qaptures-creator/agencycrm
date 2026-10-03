@@ -287,20 +287,20 @@ export async function fetchAshbourneAllMembersCsv(page: Page, cfg: AshbourneConf
   await page.waitForTimeout(800);
 
   // --- Step: Next -> Report Destination modal -> EXPORT -> OK ---
-  const urlBeforeNext1 = page.url();
+  // This first Next click reveals the Report Destination modal INLINE on
+  // the same page — confirmed it never navigates, so waiting for a URL
+  // change here was dead weight: it guaranteed an 8-second timeout on every
+  // single run before falling through to the (near-instant) networkidle
+  // fallback. Wait directly for what's actually needed next instead.
   const next1 = await nativeClick(page, "#ctl00_cpMain_btnNext");
   if (!next1) {
     throw await withDebugScreenshot(page, "all-members-next-not-found", "Could not find the Next button (#ctl00_cpMain_btnNext) after applying filters.");
   }
-  try {
-    await page.waitForFunction((prev) => window.location.href !== prev, urlBeforeNext1, { timeout: 8000 });
-  } catch {
-    await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
-  }
 
   const exportOption = page.getByText(/^export$/i).first();
-  const hasExportOption = (await exportOption.count()) > 0;
-  if (!hasExportOption) {
+  try {
+    await exportOption.waitFor({ state: "attached", timeout: 10_000 });
+  } catch {
     throw await withDebugScreenshot(page, "all-members-export-option-not-found", "Could not find the 'EXPORT' Report Destination option after clicking Next.");
   }
   await exportOption.evaluate((el) => (el as HTMLElement).click());
