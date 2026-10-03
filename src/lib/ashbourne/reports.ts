@@ -338,15 +338,34 @@ export async function fetchAshbourneAllMembersCsv(page: Page, cfg: AshbourneConf
   await page.waitForLoadState("domcontentloaded").catch(() => {});
   await page.waitForTimeout(800);
 
-  // --- Step: File Type = Excel/CSV (selectOption, not a DOM click — see
-  // function doc), then Export -> Download ---
+  // --- Step: File Type = Excel/CSV ---
+  // The select renders disabled and Ashbourne's own page JS re-enables it
+  // almost immediately (confirmed: ~4ms after the page settles) — but that
+  // enabling script lives in an external bundle and occasionally just
+  // doesn't fire at all, leaving the select permanently disabled (confirmed
+  // in production: Playwright's selectOption() retried every 500ms for the
+  // full 30s timeout and it never budged). Rather than depend on Ashbourne's
+  // JS working every time, set the value directly via the DOM — the same
+  // native-manipulation approach already proven for checkboxes/clicks
+  // throughout this connector — which works whether or not their script
+  // ever ran.
   const exportSelect = page.locator("#ctl00_cpMain_dlExport");
   try {
     await exportSelect.waitFor({ state: "attached", timeout: 10_000 });
   } catch {
     throw await withDebugScreenshot(page, "all-members-filetype-select-not-found", `Could not find the File Type dropdown (#ctl00_cpMain_dlExport) on the export page (${page.url()}).`);
   }
-  await exportSelect.selectOption({ label: "Excel/CSV" });
+  const fileTypeSet = await exportSelect.evaluate((el) => {
+    const sel = el as HTMLSelectElement;
+    sel.disabled = false;
+    sel.value = "excel";
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    sel.dispatchEvent(new Event("input", { bubbles: true }));
+    return sel.value === "excel";
+  });
+  if (!fileTypeSet) {
+    throw await withDebugScreenshot(page, "all-members-filetype-select-failed", "Found the File Type dropdown but could not set it to Excel/CSV.");
+  }
   await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(500);
 

@@ -167,10 +167,27 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
   }
 
   try {
-    const result = await withAshbourneBrowser(async (page, config) => {
-      await loginToAshbourne(page, config);
-      return fetchAshbourneAllMembersCsv(page, config);
-    });
+    // One retry — the Ashbourne site itself has shown occasional transient
+    // flakiness mid-flow (a client-side script that's supposed to re-enable
+    // a form control sometimes just doesn't fire), and a full login + ~15
+    // step wizard is a lot of surface area for a one-off hiccup to ruin an
+    // otherwise-working run. A fresh browser session on retry sidesteps
+    // whatever transient state caused the first attempt to fail.
+    let result;
+    try {
+      result = await withAshbourneBrowser(async (page, config) => {
+        await loginToAshbourne(page, config);
+        return fetchAshbourneAllMembersCsv(page, config);
+      });
+    } catch (firstErr) {
+      await new Promise((r) => setTimeout(r, 3000));
+      result = await withAshbourneBrowser(async (page, config) => {
+        await loginToAshbourne(page, config);
+        return fetchAshbourneAllMembersCsv(page, config);
+      }).catch(() => {
+        throw firstErr; // the original error is more informative than a second identical failure
+      });
+    }
 
     outcome.recordsFound = result.members.length;
 
