@@ -29,10 +29,8 @@ import {
 } from "@/lib/gym/dashboard-data";
 import { getAshbourneDiagnosticEnvSummary } from "@/lib/ashbourne/config";
 import { getLatestAshbourneSyncLog } from "@/lib/ashbourne/sync";
-import { getTodayLiveEntryStats } from "@/lib/gym/live-entry-data";
 import { resolveChartRange, getMembershipTypesOverTime } from "@/lib/gym/membership-type-report";
 import { AshbourneSyncPanel } from "@/app/gym/integrations/ashbourne-sync-panel";
-import { LiveEntryWidget } from "@/components/gym/dashboard/live-entry-widget";
 import { MembershipTypeChartSection } from "@/components/gym/dashboard/membership-type-chart-section";
 import { Landmark } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
@@ -58,7 +56,7 @@ export default async function GymDashboardPage() {
   const showFinance = can(role, "viewFinance");
   const showAshbourne = can(role, "manageIntegrations");
 
-  const [kpis, todayStaff, todayTasks, recentEnquiries, membershipSnapshot, alerts, revenue, ashbourneLastLogRaw, liveEntryTodayStats, membershipTypeReport] =
+  const [kpis, todayStaff, todayTasks, recentEnquiries, membershipSnapshot, alerts, revenue, ashbourneLastLogRaw, membershipTypeReport] =
     await Promise.all([
       getDashboardKpis(),
       getTodayStaff(),
@@ -68,7 +66,6 @@ export default async function GymDashboardPage() {
       getAlerts(),
       showFinance ? getRevenueSnapshot() : Promise.resolve(null),
       getLatestAshbourneSyncLog(),
-      getTodayLiveEntryStats(),
       getMembershipTypesOverTime(resolveChartRange("this_year")),
     ]);
 
@@ -327,7 +324,7 @@ export default async function GymDashboardPage() {
         </Card>
       </div>
 
-      <LiveEntryWidget initialTodayStats={liveEntryTodayStats} />
+      <MembershipTypeChartSection initialReport={membershipTypeReport} />
 
       {/* Revenue snapshot */}
       {showFinance && (
@@ -411,8 +408,6 @@ export default async function GymDashboardPage() {
           </CardContent>
         </Card>
       )}
-
-      <MembershipTypeChartSection initialReport={membershipTypeReport} />
     </div>
   );
 }
