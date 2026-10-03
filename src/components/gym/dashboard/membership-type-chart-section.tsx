@@ -59,6 +59,32 @@ export function MembershipTypeChartSection({ initialReport }: { initialReport: M
   }
   const exportUrl = `/api/gym/membership-type-report?${exportParams.toString()}`;
 
+  // No ZIP library in this project, and the underlying datasets (membership
+  // types over time, new members, day passes, cancellations, enquiries)
+  // are different shapes that don't belong forced into one CSV — so
+  // "export everything" is a handful of separate downloads triggered by
+  // one click, staggered slightly so browsers don't treat them as a popup
+  // flood, rather than one combined/zipped file.
+  function handleExportAll() {
+    const urls = [
+      exportUrl,
+      "/api/gym/dashboard/new-members/export",
+      "/api/gym/dashboard/day-passes/export",
+      "/api/gym/dashboard/cancellations/export",
+      "/api/gym/dashboard/enquiries/export",
+    ];
+    urls.forEach((url, i) => {
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }, i * 400);
+    });
+  }
+
   const hasAnyData = report.buckets.some((b) => (b.total ?? 0) > 0);
 
   return (
@@ -70,12 +96,24 @@ export function MembershipTypeChartSection({ initialReport }: { initialReport: M
             New memberships by type, based on each membership&apos;s start date — not a current-vs-historical snapshot.
           </p>
         </div>
-        <Button size="sm" variant="outline" className="gap-1.5" asChild>
-          <a href={exportUrl} download>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5" asChild>
+            <a href={exportUrl} download>
+              <Download className="size-4" />
+              Export Chart CSV
+            </a>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={handleExportAll}
+            title="Downloads the chart, New Members, Day Passes, Cancellations and Enquiries as separate CSV files"
+          >
             <Download className="size-4" />
-            Export CSV
-          </a>
-        </Button>
+            Export Report
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">

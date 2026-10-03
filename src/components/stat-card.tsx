@@ -1,4 +1,4 @@
-import { type LucideIcon } from "lucide-react";
+import { Download, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -8,15 +8,33 @@ export function StatCard({
   icon: Icon,
   hint,
   tone = "default",
+  exportHref,
+  exportLabel,
 }: {
   label: string;
   value: React.ReactNode;
   icon: LucideIcon;
   hint?: string;
   tone?: "default" | "destructive" | "success" | "warning";
+  /** When set, renders a small download affordance that links straight to
+   * a CSV of the real records behind this number — never just the count.
+   * Omit for purely presentational tiles. */
+  exportHref?: string;
+  exportLabel?: string;
 }) {
   return (
-    <Card className="p-4">
+    <Card className="relative p-4">
+      {exportHref && (
+        <a
+          href={exportHref}
+          download
+          title={exportLabel ?? `Export ${label} as CSV`}
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          <Download className="size-3.5" />
+        </a>
+      )}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">{label}</p>

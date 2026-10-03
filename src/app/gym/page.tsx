@@ -14,6 +14,7 @@ import {
   BadgeAlert,
   Clock,
   Ticket,
+  Download,
 } from "lucide-react";
 import { requireTabAccess } from "@/lib/gym/auth";
 import { can, roleLabel, type GymAccessRole } from "@/lib/gym/permissions";
@@ -116,8 +117,21 @@ export default async function GymDashboardPage() {
       {/* KPI grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         <StatCard label="Active Members" value={kpis.activeMembers} icon={Users} />
-        <StatCard label="New Members This Month" value={kpis.newMembersThisMonth} icon={UserPlus} tone="success" />
-        <StatCard label="Cancellations" value={kpis.cancellationsThisMonth} icon={UserMinus} tone={kpis.cancellationsThisMonth > 0 ? "warning" : "default"} />
+        <StatCard
+          label="New Members This Month"
+          value={kpis.newMembersThisMonth}
+          icon={UserPlus}
+          tone="success"
+          exportHref={kpis.newMembersThisMonth > 0 ? "/api/gym/dashboard/new-members/export" : undefined}
+        />
+        <StatCard
+          label="Cancellations"
+          value={kpis.cancellationsThisMonth}
+          icon={UserMinus}
+          tone={kpis.cancellationsThisMonth > 0 ? "warning" : "default"}
+          exportHref={kpis.cancellationsThisMonth > 0 ? "/api/gym/dashboard/cancellations/export" : undefined}
+          exportLabel="Export cancellations (manually recorded only) as CSV"
+        />
         {showFinance ? (
           <StatCard label="Monthly Membership Revenue" value={moneyGBP(kpis.monthlyMembershipRevenue)} icon={Wallet} tone="success" />
         ) : (
@@ -131,7 +145,12 @@ export default async function GymDashboardPage() {
             tone={kpis.outstandingCount > 0 ? "destructive" : "default"}
           />
         )}
-        <StatCard label="Day Passes This Month" value={kpis.dayPassesThisMonth} icon={Ticket} />
+        <StatCard
+          label="Day Passes This Month"
+          value={kpis.dayPassesThisMonth}
+          icon={Ticket}
+          exportHref={kpis.dayPassesThisMonth > 0 ? "/api/gym/dashboard/day-passes/export" : undefined}
+        />
         <StatCard label="New Enquiries" value={kpis.newEnquiries} icon={Inbox} />
         <StatCard label="Leads Awaiting Follow-Up" value={kpis.leadsAwaitingFollowUp} icon={Target} tone={kpis.leadsAwaitingFollowUp > 0 ? "warning" : "default"} />
         <StatCard label="Staff Currently Working" value={kpis.staffCurrentlyWorking} icon={UsersRound} tone="success" />
@@ -241,9 +260,22 @@ export default async function GymDashboardPage() {
         <Card className="xl:col-span-2">
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-semibold">Recent Enquiries</CardTitle>
-            <Link href="/gym/enquiries" className="text-xs text-primary hover:underline">
-              Open inbox
-            </Link>
+            <div className="flex items-center gap-3">
+              {recentEnquiries.length > 0 && (
+                <a
+                  href="/api/gym/dashboard/enquiries/export"
+                  download
+                  title="Export all enquiries as CSV"
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Download className="size-3.5" />
+                  CSV
+                </a>
+              )}
+              <Link href="/gym/enquiries" className="text-xs text-primary hover:underline">
+                Open inbox
+              </Link>
+            </div>
           </CardHeader>
           <CardContent>
             {recentEnquiries.length === 0 ? (

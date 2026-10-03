@@ -66,6 +66,47 @@ export async function getDashboardKpis() {
   };
 }
 
+export type CancellationRow = {
+  memberNumber: string;
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  planName: string;
+  cancelledAt: Date | null;
+};
+
+/** The actual memberships behind the "Cancellations This Month" KPI — same
+ * status+cancelledAt WHERE as getDashboardKpis, so the export always
+ * matches the number on the card. Manually-recorded only: Ashbourne's
+ * export has no cancellation signal, so every CANCELLED row here was set
+ * by staff in the CRM, never by a sync (see membership-rules.ts). */
+export async function getCancellationsThisMonthRecords(reference: Date = new Date()): Promise<CancellationRow[]> {
+  const monthStart = startOfMonth(reference);
+  const monthEnd = endOfMonth(reference);
+  const rows = await prisma.gymMembership.findMany({
+    where: { status: "CANCELLED", cancelledAt: { gte: monthStart, lte: monthEnd } },
+    orderBy: { cancelledAt: "desc" },
+    include: { member: true, plan: true },
+  });
+  return rows.map((r) => ({
+    memberNumber: r.member.memberNumber,
+    fullName: r.member.fullName,
+    email: r.member.email,
+    phone: r.member.phone,
+    planName: r.plan.name,
+    cancelledAt: r.cancelledAt,
+  }));
+}
+
+/** Every enquiry, most recent first — the full set behind the Recent
+ * Enquiries card (which only ever shows the latest few on screen). */
+export async function getEnquiriesForExport() {
+  return prisma.gymEnquiry.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { assignedTo: true },
+  });
+}
+
 export async function getTodayStaff() {
   const today = new Date();
   const shifts = await prisma.gymRotaShift.findMany({
