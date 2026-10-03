@@ -38,6 +38,9 @@ function OutcomeSummary({ outcome }: { outcome: SyncOutcome }) {
           <span>Unchanged: <span className="font-medium text-foreground">{outcome.unchanged}</span></span>
           <span>Review needed: <span className={cn("font-medium", outcome.reviewRequired > 0 ? "text-warning" : "text-foreground")}>{outcome.reviewRequired}</span></span>
           <span>Failed: <span className={cn("font-medium", outcome.failed > 0 ? "text-destructive" : "text-foreground")}>{outcome.failed}</span></span>
+          {outcome.historyEvents !== undefined && (
+            <span>History events{outcome.dryRun ? " (would create)" : ""}: <span className="font-medium text-foreground">{outcome.historyEvents}</span></span>
+          )}
         </div>
       )}
       {outcome.timing && (

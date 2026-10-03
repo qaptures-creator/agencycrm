@@ -59,11 +59,53 @@ export type SyncOutcome = {
    * something a code change here speeds up), dbMs is the matching/upsert
    * loop against our own database (the part concurrency batching targets). */
   timing?: { ashbourneMs: number; dbMs: number; totalMs: number };
+  /** Count of GymMembershipEvent rows created this run (or that WOULD be
+   * created, for a dry run — same classification logic, just not written).
+   * Written in one batched createMany after the loop, not per-record. */
+  historyEvents?: number;
 };
 
 function fullNameOf(m: AshbourneMember): string {
   return [m.firstName, m.surname].filter(Boolean).join(" ").trim() || m.memberNo;
 }
+
+/**
+ * History tracking (Tier 3): classifies whether a membership's state change
+ * is "meaningful" enough to log, and as what GymMembershipEvent type — pure,
+ * in-memory, zero DB calls. Every input here is already fetched as part of
+ * the record's normal processing (the same `existing`/computedStatus values
+ * already used for the dry-run fieldsChanged comparison), so classifying
+ * costs nothing extra; only turning the result into an actual event row
+ * costs anything, and even that's deferred to one batched createMany at the
+ * end of the run rather than a write per record.
+ */
+type MembershipChangeKind = "joined" | "frozen" | "unfrozen" | "renewed" | "updated" | "none";
+
+function classifyMembershipChange(input: {
+  isNew: boolean;
+  oldStatus: string | null;
+  newStatus: string;
+  oldRenewalDate: Date | null;
+  newRenewalDate: Date | null;
+  oldType: string | null;
+  newType: string | null;
+}): { kind: MembershipChangeKind; reason?: string } {
+  if (input.isNew) return { kind: "joined" };
+  if (input.newStatus === "FROZEN" && input.oldStatus !== "FROZEN") return { kind: "frozen" };
+  if (input.oldStatus === "FROZEN" && input.newStatus !== "FROZEN") return { kind: "unfrozen" };
+  if ((input.oldRenewalDate?.getTime() ?? null) !== (input.newRenewalDate?.getTime() ?? null)) return { kind: "renewed" };
+  if (input.oldStatus !== input.newStatus) return { kind: "updated", reason: `status ${input.oldStatus ?? "none"} -> ${input.newStatus}` };
+  if (input.oldType !== input.newType) return { kind: "updated", reason: `type ${input.oldType ?? "none"} -> ${input.newType ?? "none"}` };
+  return { kind: "none" };
+}
+
+const EVENT_TYPE_BY_CHANGE_KIND: Record<Exclude<MembershipChangeKind, "none">, string> = {
+  joined: "JOINED",
+  frozen: "FROZEN",
+  unfrozen: "UNFROZEN",
+  renewed: "RENEWED",
+  updated: "UPDATED",
+};
 
 type MatchResult =
   | { kind: "member-no"; memberId: string }
@@ -119,6 +161,7 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
     skipped: 0,
     failed: 0,
     sample: [],
+    historyEvents: 0,
   };
 
   // Plan lookups are cached per run (mirrors ashbourne-sales-import.ts) —
@@ -150,11 +193,22 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
    * from a stored value), never set directly from the raw Ashbourne status
    * text. freezeStart/freezeEnd/cancelledAt are never touched here —
    * Ashbourne's export has no signal for them (see deriveMembershipStatus's
-   * doc comment), so those stay CRM-manual. */
-  async function upsertMembership(memberId: string, record: AshbourneMember, canonType: string | null, canonStatus: string | null) {
+   * doc comment), so those stay CRM-manual.
+   *
+   * Takes `existingMembershipId` rather than looking it up itself — the
+   * caller already knows this (it's part of the `existing` member fetch for
+   * updates, and trivially null for brand-new members), so this used to run
+   * a redundant findFirst on every single record; passing it in removes
+   * that query entirely rather than adding one for history tracking. */
+  async function upsertMembership(
+    memberId: string,
+    record: AshbourneMember,
+    canonType: string | null,
+    canonStatus: string | null,
+    existingMembershipId: string | null
+  ): Promise<{ membershipId: string; status: string }> {
     const planId = await findOrCreatePlanId(canonType ?? "Unknown");
     const status = deriveMembershipStatus({ ashbourneStatus: canonStatus, startDate: record.joinedDate ?? null, endDate: record.expiryDate ?? null });
-    const existingMembership = await prisma.gymMembership.findFirst({ where: { memberId, source: "ASHBOURNE" }, select: { id: true } });
 
     const data = {
       planId,
@@ -164,22 +218,29 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
       billingAmount: record.periodPayment ?? undefined,
     };
 
-    if (existingMembership) {
-      await prisma.gymMembership.update({ where: { id: existingMembership.id }, data });
-    } else {
-      await prisma.gymMembership.create({
-        data: {
-          memberId,
-          planId,
-          status,
-          startDate: record.joinedDate ?? new Date(),
-          renewalDate: record.expiryDate ?? null,
-          billingAmount: record.periodPayment ?? 0,
-          source: "ASHBOURNE",
-        },
-      });
+    if (existingMembershipId) {
+      await prisma.gymMembership.update({ where: { id: existingMembershipId }, data });
+      return { membershipId: existingMembershipId, status };
     }
+    const created = await prisma.gymMembership.create({
+      data: {
+        memberId,
+        planId,
+        status,
+        startDate: record.joinedDate ?? new Date(),
+        renewalDate: record.expiryDate ?? null,
+        billingAmount: record.periodPayment ?? 0,
+        source: "ASHBOURNE",
+      },
+    });
+    return { membershipId: created.id, status };
   }
+
+  // History events (Tier 3) are collected here across the whole run and
+  // written in ONE batched createMany after the loop — never per-record —
+  // so a sync that changes 10 memberships does exactly one extra insert
+  // query total, regardless of whether it's 10 or 2,000 members.
+  const pendingEvents: { membershipId: string; type: string; notes: string }[] = [];
 
   const runStartedAt = Date.now();
 
@@ -263,6 +324,7 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
               outcome.sample?.push({ action: "review", memberNo: record.memberNo, name: fullNameOf(record) });
             } else {
               outcome.created++;
+              outcome.historyEvents!++; // every brand-new membership is a "joined" event
               if (outcome.sample!.length < 10) outcome.sample!.push({ action: "create", memberNo: record.memberNo, name: fullNameOf(record) });
             }
             return;
@@ -287,7 +349,8 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
               reviewRequiredReason: emailRaceReason,
             },
           });
-          await upsertMembership(created.id, record, canonType, canonStatus);
+          const { membershipId } = await upsertMembership(created.id, record, canonType, canonStatus, null);
+          pendingEvents.push({ membershipId, type: "JOINED", notes: "Ashbourne sync: new member" });
           if (emailRaceReason) outcome.reviewRequired++;
           else outcome.created++;
           return;
@@ -312,11 +375,21 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
             ashbourneStatus: true,
             ashbourneMembershipType: true,
             ashbourneExpiryDate: true,
-            memberships: { where: { source: "ASHBOURNE" }, select: { status: true, renewalDate: true, startDate: true }, take: 1 },
+            memberships: { where: { source: "ASHBOURNE" }, select: { id: true, status: true, renewalDate: true, startDate: true }, take: 1 },
           },
         });
         const existingMembership = existing.memberships[0] ?? null;
         const computedStatus = deriveMembershipStatus({ ashbourneStatus: canonStatus, startDate: record.joinedDate ?? null, endDate: record.expiryDate ?? null });
+
+        const change = classifyMembershipChange({
+          isNew: !existingMembership,
+          oldStatus: existingMembership?.status ?? null,
+          newStatus: computedStatus,
+          oldRenewalDate: existingMembership?.renewalDate ?? null,
+          newRenewalDate: record.expiryDate ?? null,
+          oldType: existing.ashbourneMembershipType,
+          newType: canonType,
+        });
 
         const fieldsChanged =
           existing.ashbourneMemberNo !== record.memberNo ||
@@ -340,6 +413,7 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
           } else {
             outcome.unchanged++;
           }
+          if (change.kind !== "none") outcome.historyEvents!++;
           return;
         }
 
@@ -362,7 +436,10 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
             ...(!existing.postcode && record.postcode ? { postcode: record.postcode } : {}),
           },
         });
-        await upsertMembership(memberId, record, canonType, canonStatus);
+        const { membershipId } = await upsertMembership(memberId, record, canonType, canonStatus, existingMembership?.id ?? null);
+        if (change.kind !== "none") {
+          pendingEvents.push({ membershipId, type: EVENT_TYPE_BY_CHANGE_KIND[change.kind], notes: change.reason ? `Ashbourne sync: ${change.reason}` : `Ashbourne sync: ${change.kind}` });
+        }
 
         if (fieldsChanged) outcome.updated++;
         else outcome.unchanged++;
@@ -381,6 +458,14 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
     for (let i = 0; i < result.members.length; i += CONCURRENCY) {
       await Promise.all(result.members.slice(i, i + CONCURRENCY).map(processRecord));
     }
+
+    // The ONE extra query history tracking adds to the whole run, regardless
+    // of whether 10 or 2,000 memberships changed — never a write inside the
+    // per-record loop.
+    if (!opts.dryRun && pendingEvents.length > 0) {
+      await prisma.gymMembershipEvent.createMany({ data: pendingEvents });
+    }
+    if (!opts.dryRun) outcome.historyEvents = pendingEvents.length;
 
     const dbMs = Date.now() - dbStartedAt;
     outcome.timing = { ashbourneMs, dbMs, totalMs: ashbourneMs + dbMs };
