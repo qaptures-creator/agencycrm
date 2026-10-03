@@ -117,16 +117,25 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
 
   // Plan lookups are cached per run (mirrors ashbourne-sales-import.ts) —
   // a fresh sync of ~2,375 members would otherwise re-query the same ~10
-  // membership type plans thousands of times.
-  const planCache = new Map<string, string>(); // canonical plan name -> id
+  // membership type plans thousands of times. Caches the in-flight PROMISE,
+  // not just its resolved value — records now process concurrently (see the
+  // batched loop below), so without this, two records hitting a brand-new
+  // plan name at the same moment could both miss the cache and both race to
+  // create a duplicate GymMembershipPlan row (name isn't a unique column).
+  // Caching the promise means the second caller awaits the first's in-flight
+  // create instead of starting its own.
+  const planCache = new Map<string, Promise<string>>(); // canonical plan name -> id
 
-  async function findOrCreatePlanId(canonType: string): Promise<string> {
+  function findOrCreatePlanId(canonType: string): Promise<string> {
     const cached = planCache.get(canonType);
     if (cached) return cached;
-    const existingPlan = await prisma.gymMembershipPlan.findFirst({ where: { name: canonType, source: "ASHBOURNE" } });
-    const plan = existingPlan ?? (await prisma.gymMembershipPlan.create({ data: { name: canonType, price: 0, source: "ASHBOURNE" } }));
-    planCache.set(canonType, plan.id);
-    return plan.id;
+    const promise = (async () => {
+      const existingPlan = await prisma.gymMembershipPlan.findFirst({ where: { name: canonType, source: "ASHBOURNE" } });
+      const plan = existingPlan ?? (await prisma.gymMembershipPlan.create({ data: { name: canonType, price: 0, source: "ASHBOURNE" } }));
+      return plan.id;
+    })();
+    planCache.set(canonType, promise);
+    return promise;
   }
 
   /** Upserts the one ASHBOURNE-sourced GymMembership for a member — status
@@ -191,11 +200,21 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
 
     outcome.recordsFound = result.members.length;
 
-    for (const record of result.members) {
+    // Guards against the one real race concurrent processing introduces:
+    // two brand-new (no existing CRM match) rows sharing the same email
+    // could, if processed at the exact same moment, both independently see
+    // "0 existing matches" and both create separate members instead of one
+    // correctly resolving to the other via the email-fallback match — a
+    // race that doesn't exist when every record is matched against the DB
+    // strictly one at a time. Claiming is synchronous (no await between
+    // the check and the add), so it's race-free regardless of concurrency.
+    const claimedEmails = new Set<string>();
+
+    async function processRecord(record: AshbourneMember): Promise<void> {
       try {
         if (!record.memberNo) {
           outcome.skipped++;
-          continue;
+          return;
         }
 
         const canonType = canonicalizeMembershipType(record.membershipType ?? null);
@@ -213,14 +232,29 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
           }
           outcome.reviewRequired++;
           outcome.sample?.push({ action: "review", memberNo: record.memberNo, name: fullNameOf(record) });
-          continue;
+          return;
         }
 
         if (match.kind === "none") {
+          let emailRaceReason: string | null = null;
+          if (record.email) {
+            const emailKey = record.email.toLowerCase();
+            if (claimedEmails.has(emailKey)) {
+              emailRaceReason = `email ${record.email} also appears on another new member in this same sync run — not auto-merged`;
+            } else {
+              claimedEmails.add(emailKey);
+            }
+          }
+
           if (opts.dryRun) {
-            outcome.created++;
-            if (outcome.sample!.length < 10) outcome.sample!.push({ action: "create", memberNo: record.memberNo, name: fullNameOf(record) });
-            continue;
+            if (emailRaceReason) {
+              outcome.reviewRequired++;
+              outcome.sample?.push({ action: "review", memberNo: record.memberNo, name: fullNameOf(record) });
+            } else {
+              outcome.created++;
+              if (outcome.sample!.length < 10) outcome.sample!.push({ action: "create", memberNo: record.memberNo, name: fullNameOf(record) });
+            }
+            return;
           }
           const created = await prisma.gymMember.create({
             data: {
@@ -238,14 +272,21 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
               ashbourneMembershipType: canonType,
               ashbourneExpiryDate: record.expiryDate ?? null,
               ashbourneLastSyncedAt: new Date(),
+              reviewRequired: !!emailRaceReason,
+              reviewRequiredReason: emailRaceReason,
             },
           });
           await upsertMembership(created.id, record, canonType, canonStatus);
-          outcome.created++;
-          continue;
+          if (emailRaceReason) outcome.reviewRequired++;
+          else outcome.created++;
+          return;
         }
 
         // member-no / member-number / email match — update in place.
+        // Concurrent updates to the SAME existing member (e.g. two incoming
+        // rows both matching one CRM record via email) are safe at the DB
+        // level — Postgres serializes them, last write wins, same semantics
+        // sequential processing already had.
         const memberId = match.memberId;
         const existing = await prisma.gymMember.findUniqueOrThrow({
           where: { id: memberId },
@@ -288,7 +329,7 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
           } else {
             outcome.unchanged++;
           }
-          continue;
+          return;
         }
 
         await prisma.gymMember.update({
@@ -317,6 +358,17 @@ export async function syncAshbourneMembers(opts: { dryRun: boolean }): Promise<S
       } catch {
         outcome.failed++;
       }
+    }
+
+    // Processed in concurrency-limited batches rather than one at a time —
+    // each record's own matching + write logic is unchanged (and the one
+    // real concurrency hazard, the shared-new-email race, is guarded above),
+    // so this is a straightforward latency win: ~2,375 members' worth of
+    // sequential DB round-trips was the dominant cost of a sync run, not the
+    // Ashbourne scrape itself.
+    const CONCURRENCY = 20;
+    for (let i = 0; i < result.members.length; i += CONCURRENCY) {
+      await Promise.all(result.members.slice(i, i + CONCURRENCY).map(processRecord));
     }
 
     outcome.success = true;
