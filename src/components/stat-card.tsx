@@ -29,7 +29,6 @@ export function StatCard({
           href={exportHref}
           download
           title={exportLabel ?? `Export ${label} as CSV`}
-          onClick={(e) => e.stopPropagation()}
           className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-secondary hover:text-foreground"
         >
           <Download className="size-3.5" />
