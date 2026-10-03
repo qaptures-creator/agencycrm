@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { startOfMonth, endOfMonth, startOfYear, endOfYear, startOfDay, endOfDay, subDays, subMonths, addDays, addMonths, differenceInCalendarDays, format } from "date-fns";
 import type { ChartRangePreset, MembershipTypeBucket, MembershipTypeReport } from "./membership-type-report-shared";
 import { toCsv } from "./csv";
+import { ACTIVE_MEMBERSHIP_TYPES, DAY_PASS_TYPE } from "./membership-rules";
 
 /**
  * "Membership Types Over Time" — the one function powering both the
@@ -19,7 +20,17 @@ import { toCsv } from "./csv";
  * history is what GymMembershipEvent is for, going forward).
  */
 
-const MAX_SERIES = 5; // matches the 5 defined --chart-N color tokens
+// The plans the business actually tracks as distinct membership types —
+// the same 3 genuine ongoing plans + Day Pass used by the Active
+// Members/Day Passes KPIs elsewhere (membership-kpis.ts), reused here
+// rather than re-derived so the chart's series never drift from what
+// "counts" as a real membership type everywhere else in the CRM.
+// Everything else (legacy/manual/test plans like "Cash Membership Temp",
+// "1 Month Paid In Full", £0 placeholder plans, etc.) is real data but not
+// a type the business reports on separately — it folds into "Other"
+// rather than ranking by volume, which could otherwise let a higher-
+// volume junk plan crowd a real plan out of its own series.
+const CANONICAL_CHART_TYPES: readonly string[] = [...ACTIVE_MEMBERSHIP_TYPES, DAY_PASS_TYPE];
 const DAILY_GRANULARITY_THRESHOLD_DAYS = 45;
 
 export function resolveChartRange(preset: string | undefined, customFrom?: string, customTo?: string): { from: Date; to: Date; granularity: "day" | "month"; label: string; preset: ChartRangePreset } {
@@ -96,24 +107,18 @@ export async function getMembershipTypesOverTime(range: { from: Date; to: Date; 
     GROUP BY 1, 2
   `);
 
-  // Rank types by total volume in range; keep the top MAX_SERIES, fold the
-  // rest into "Other" — a data-driven cap (not an arbitrary hidden type),
-  // so the chart stays readable regardless of how many membership types
-  // exist. Only kicks in when there actually are more than MAX_SERIES.
-  const totalByType = new Map<string, number>();
-  for (const r of rows) {
-    totalByType.set(r.type, (totalByType.get(r.type) ?? 0) + Number(r.cnt));
-  }
-  const rankedTypes = [...totalByType.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
-  const topTypes = rankedTypes.slice(0, MAX_SERIES);
-  const hasOther = rankedTypes.length > MAX_SERIES;
-  const types = hasOther ? [...topTypes, "Other"] : topTypes;
+  // The 4 canonical types always get their own series, in a stable order,
+  // whether or not they have volume in this particular range — so the
+  // legend/colors stay consistent as the user switches date ranges.
+  // Any non-canonical plan name present in the data folds into "Other".
+  const hasOther = rows.some((r) => !CANONICAL_CHART_TYPES.includes(r.type));
+  const types = hasOther ? [...CANONICAL_CHART_TYPES, "Other"] : [...CANONICAL_CHART_TYPES];
 
   const countsByBucketKey = new Map<string, Record<string, number>>();
   for (const r of rows) {
     const key = bucketKey(r.bucket, range.granularity);
     const bucketCounts = countsByBucketKey.get(key) ?? {};
-    const seriesName = topTypes.includes(r.type) ? r.type : "Other";
+    const seriesName = CANONICAL_CHART_TYPES.includes(r.type) ? r.type : "Other";
     bucketCounts[seriesName] = (bucketCounts[seriesName] ?? 0) + Number(r.cnt);
     countsByBucketKey.set(key, bucketCounts);
   }
