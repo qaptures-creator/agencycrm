@@ -329,6 +329,7 @@ model GymUser {
   cleaningTasksCreated   GymCleaningTask[]         @relation("CleaningTaskCreatedBy")
   cleaningTasksCompleted GymCleaningTask[]         @relation("CleaningTaskCompletedBy")
   navBadgesSeen          GymNavBadgeSeen[]
+  chatMessages           GymChatMessage[]          @relation("ChatMessageAuthor")
 
   @@index([accessRole])
 }
@@ -1131,6 +1132,28 @@ model GymAnnouncement {
 
   createdBy   GymUser? @relation("AnnouncementCreatedBy", fields: [createdById], references: [id])
   createdById String?
+}
+
+/** One shared team-wide room — no DMs/channels. Messages older than 90
+ * days are hard-deleted (see src/lib/gym/chat.ts); nothing here is
+ * expected to persist indefinitely. */
+model GymChatMessage {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+
+  author   GymUser @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String
+
+  @@index([createdAt])
+}
+
+/** Singleton throttle marker so the 90-day chat cleanup runs at most once
+ * every 24h (opportunistically, off real chat activity) rather than on
+ * every single poll/send — same pattern as GymGeocodeSyncState below. */
+model GymChatCleanupState {
+  id        String    @id @default("singleton")
+  lastRunAt DateTime?
 }
 
 // ---------------------------------------------------------------------------

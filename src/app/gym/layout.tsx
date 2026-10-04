@@ -4,6 +4,7 @@ import { GymSidebar } from "@/components/gym/sidebar";
 import { GymTopbar } from "@/components/gym/topbar";
 import { getNavBadgeCounts } from "@/lib/gym/nav-badges";
 import { getAllowedTabHrefs } from "@/lib/gym/role-permissions";
+import { FloatingChatWidget } from "@/components/gym/chat/floating-chat-widget";
 
 export const metadata: Metadata = { title: "Muscle Massacre" };
 
@@ -21,6 +22,7 @@ export default async function GymLayout({ children }: { children: React.ReactNod
           <div className="mx-auto w-full max-w-[1700px] px-4 py-6 sm:px-6 lg:px-8">{children}</div>
         </main>
       </div>
+      <FloatingChatWidget currentUser={{ id: user.id, name: user.name, accessRole: user.accessRole }} />
     </div>
   );
 }
