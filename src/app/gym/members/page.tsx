@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { parseMemberListFilters, getFilteredMembers, getDistinctMembershipTypes } from "@/lib/gym/member-filters";
 import { MemberList } from "./member-list";
 import { MemberMapView } from "./member-map-view";
+import { MemberSectionNav } from "./member-section-nav";
 
 export default async function MembersPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await requireTabAccess("/gym/members");
@@ -27,6 +28,8 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
         <h1 className="font-display text-2xl font-bold">Members</h1>
         <p className="text-sm text-muted-foreground">Member records, membership status and payment health.</p>
       </div>
+
+      <MemberSectionNav />
 
       <Tabs defaultValue="list">
         <TabsList>
