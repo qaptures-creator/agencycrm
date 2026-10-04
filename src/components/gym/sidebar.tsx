@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronsLeft, ChevronsRight, LogOut, X } from "lucide-react";
-import { navItemsForAllowedHrefs } from "@/lib/gym/nav-config";
+import { navItemsForAllowedHrefs, NAV_GROUPS, type GymNavGroupKey } from "@/lib/gym/nav-config";
 import { roleLabel } from "@/lib/gym/permissions";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/actions/gym/auth";
@@ -20,6 +20,26 @@ function NavBadge({ count, collapsed }: { count: number; collapsed?: boolean }) 
     return <span className="absolute right-1 top-1 flex size-2 rounded-full bg-success" aria-label={`+${count} new`} />;
   }
   return <span className="shrink-0 text-xs font-semibold text-success">({count > 99 ? "99+" : `+${count}`})</span>;
+}
+
+/** Purely visual grouping cue — a small dot in the item's group colour.
+ * Expanded: sits inline before the icon. Collapsed: an icon-corner dot
+ * (bottom-left, opposite the unread NavBadge dot which sits top-right, so
+ * the two never collide) with a ring matching the sidebar background so it
+ * reads clearly against the icon underneath it. */
+function GroupDot({ group, collapsed }: { group?: GymNavGroupKey; collapsed?: boolean }) {
+  if (!group) return null;
+  const meta = NAV_GROUPS[group];
+  if (collapsed) {
+    return (
+      <span
+        className="absolute bottom-1 left-1 size-1.5 rounded-full ring-2 ring-sidebar"
+        style={{ backgroundColor: meta.color }}
+        title={meta.label}
+      />
+    );
+  }
+  return <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} title={meta.label} />;
 }
 
 function NavLinks({
@@ -56,12 +76,14 @@ function NavLinks({
                 : "text-sidebar-foreground/75 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
             )}
           >
+            {!collapsed && <GroupDot group={item.group} collapsed={collapsed} />}
             <Icon
               className={cn(
                 "size-[18px] shrink-0 transition-colors",
                 active ? "text-sidebar-primary" : "text-sidebar-foreground/45 group-hover:text-sidebar-foreground"
               )}
             />
+            {collapsed && <GroupDot group={item.group} collapsed={collapsed} />}
             {!collapsed && (
               <span className="flex min-w-0 items-center gap-1.5 truncate">
                 <span className="truncate">{item.label}</span>
