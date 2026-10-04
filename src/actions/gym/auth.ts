@@ -154,6 +154,33 @@ export async function resetStaffPasswordAction(userId: string) {
   return { tempPassword };
 }
 
+const updateStaffAccountEmailSchema = z.object({ userId: z.string().min(1), email: z.string().email() });
+
+/** Owner/Manager-only: change a staff login's email address — e.g.
+ * correcting a typo or moving off a placeholder address set at creation. */
+export async function updateStaffAccountEmailAction(userId: string, email: string) {
+  const actor = await requirePermission("manageStaff");
+  const data = updateStaffAccountEmailSchema.parse({ userId, email });
+  const normalizedEmail = data.email.toLowerCase();
+
+  const existing = await prisma.gymUser.findUnique({ where: { email: normalizedEmail } });
+  if (existing && existing.id !== data.userId) {
+    throw new Error("That email is already in use by another account.");
+  }
+
+  const user = await prisma.gymUser.update({ where: { id: data.userId }, data: { email: normalizedEmail } });
+
+  await logAudit({
+    userId: actor.id,
+    action: "STAFF_ACCOUNT_EMAIL_UPDATED",
+    entityType: "GymUser",
+    entityId: user.id,
+  });
+
+  revalidatePath("/gym/staff");
+  return { email: user.email };
+}
+
 export async function setStaffActiveAction(userId: string, active: boolean) {
   const actor = await requirePermission("manageStaff");
   await prisma.gymUser.update({ where: { id: userId }, data: { active } });

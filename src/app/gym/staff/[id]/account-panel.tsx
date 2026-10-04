@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { KeyRound, ShieldCheck, ShieldOff, UserPlus } from "lucide-react";
+import { KeyRound, Mail, ShieldCheck, ShieldOff, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,16 +14,20 @@ import {
   createStaffAccountAction,
   resetStaffPasswordAction,
   setStaffActiveAction,
+  updateStaffAccountEmailAction,
 } from "@/actions/gym/auth";
 
 type Account = { id: string; email: string; accessRole: string; active: boolean } | null;
 
 export function AccountPanel({ staffId, account }: { staffId: string; account: Account }) {
+  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [email, setEmail] = React.useState("");
   const [accessRole, setAccessRole] = React.useState<GymAccessRole>("STAFF");
   const [credentials, setCredentials] = React.useState<{ email: string; tempPassword: string } | null>(null);
   const [pending, startTransition] = React.useTransition();
+  const [emailDialogOpen, setEmailDialogOpen] = React.useState(false);
+  const [newEmail, setNewEmail] = React.useState(account?.email ?? "");
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -46,6 +51,21 @@ export function AccountPanel({ staffId, account }: { staffId: string; account: A
         toast.success("Temporary password generated");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to reset password");
+      }
+    });
+  }
+
+  async function handleChangeEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!account) return;
+    startTransition(async () => {
+      try {
+        await updateStaffAccountEmailAction(account.id, newEmail);
+        toast.success("Login email updated");
+        setEmailDialogOpen(false);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to update email");
       }
     });
   }
@@ -115,6 +135,19 @@ export function AccountPanel({ staffId, account }: { staffId: string; account: A
         <span className="text-muted-foreground">· {roleLabel(account.accessRole)}</span>
       </div>
       <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5"
+          onClick={() => {
+            setNewEmail(account.email);
+            setEmailDialogOpen(true);
+          }}
+          disabled={pending}
+        >
+          <Mail className="size-3.5" />
+          Change Email
+        </Button>
         <Button size="sm" variant="outline" className="gap-1.5" onClick={handleReset} disabled={pending}>
           <KeyRound className="size-3.5" />
           Reset Password
@@ -128,6 +161,17 @@ export function AccountPanel({ staffId, account }: { staffId: string; account: A
           <CredentialsReveal credentials={credentials} inline />
         </div>
       )}
+      <EntityDialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen} title="Change Login Email" className="max-w-sm">
+        <form onSubmit={handleChangeEmail} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="acct-new-email">New email</Label>
+            <Input id="acct-new-email" type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+          </div>
+          <Button type="submit" className="w-full" disabled={pending || !newEmail.trim()}>
+            {pending ? "Saving…" : "Save email"}
+          </Button>
+        </form>
+      </EntityDialog>
     </div>
   );
 }
