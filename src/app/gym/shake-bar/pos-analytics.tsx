@@ -42,23 +42,27 @@ function PeriodCard({
   title,
   stats,
   trend,
+  showFinance,
 }: {
   title: string;
   stats: PosPeriodStats;
   trend?: { revenueChangePct: number | null; unitsChangePct: number | null };
+  showFinance: boolean;
 }) {
   return (
     <Card className="p-4">
       <p className="text-sm font-semibold">{title}</p>
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className={cn("mt-3 grid gap-2", showFinance ? "grid-cols-3" : "grid-cols-2")}>
         <div>
           <p className="text-xs text-muted-foreground">Sales</p>
           <p className="text-lg font-semibold tabular-nums">{stats.transactions}</p>
         </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Revenue</p>
-          <p className="text-lg font-semibold tabular-nums">{moneyGBP(stats.revenue)}</p>
-        </div>
+        {showFinance && (
+          <div>
+            <p className="text-xs text-muted-foreground">Revenue</p>
+            <p className="text-lg font-semibold tabular-nums">{moneyGBP(stats.revenue)}</p>
+          </div>
+        )}
         <div>
           <p className="text-xs text-muted-foreground">Units</p>
           <p className="text-lg font-semibold tabular-nums">{formatUnits(stats.units)}</p>
@@ -66,9 +70,11 @@ function PeriodCard({
       </div>
       {trend && (
         <div className="mt-3 flex items-center gap-4 border-t border-border pt-2.5">
-          <span className="text-xs text-muted-foreground">
-            Revenue vs last: <Trend pct={trend.revenueChangePct} />
-          </span>
+          {showFinance && (
+            <span className="text-xs text-muted-foreground">
+              Revenue vs last: <Trend pct={trend.revenueChangePct} />
+            </span>
+          )}
           <span className="text-xs text-muted-foreground">
             Units vs last: <Trend pct={trend.unitsChangePct} />
           </span>
@@ -137,6 +143,7 @@ export function PosAnalytics({
   categories,
   range,
   activeRangeParam,
+  showFinance,
 }: {
   headerStats: HeaderStats;
   comparisons: Comparisons;
@@ -147,13 +154,17 @@ export function PosAnalytics({
   categories: CategoryBreakdown;
   range: ResolvedPosRange;
   activeRangeParam: string;
+  /** Staff/Marketing roles can see sales activity (counts, units, stock)
+   * but not money figures — same viewFinance permission gating Revenue
+   * Snapshot/Outstanding Payments on the Dashboard. */
+  showFinance: boolean;
 }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <PeriodCard title="Today" stats={headerStats.today} />
-        <PeriodCard title="This Week" stats={headerStats.thisWeek} trend={comparisons.week} />
-        <PeriodCard title="This Month" stats={headerStats.thisMonth} trend={comparisons.month} />
+        <PeriodCard title="Today" stats={headerStats.today} showFinance={showFinance} />
+        <PeriodCard title="This Week" stats={headerStats.thisWeek} trend={comparisons.week} showFinance={showFinance} />
+        <PeriodCard title="This Month" stats={headerStats.thisMonth} trend={comparisons.month} showFinance={showFinance} />
       </div>
 
       <div className="space-y-3">
@@ -163,11 +174,11 @@ export function PosAnalytics({
         </div>
         <PosRangeFilter active={activeRangeParam} from={toDateInputValue(range.from)} to={toDateInputValue(range.to)} />
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className={cn("grid grid-cols-2 gap-3", showFinance && "sm:grid-cols-4")}>
           <StatCard label="Transactions" value={rangeStats.transactions} icon={Receipt} />
-          <StatCard label="Revenue" value={moneyGBP(rangeStats.revenue)} icon={Wallet} tone="success" />
+          {showFinance && <StatCard label="Revenue" value={moneyGBP(rangeStats.revenue)} icon={Wallet} tone="success" />}
           <StatCard label="Units Sold" value={formatUnits(rangeStats.units)} icon={Package} />
-          <StatCard label="Avg Transaction" value={moneyGBP(rangeStats.avgTransactionValue)} icon={Gauge} />
+          {showFinance && <StatCard label="Avg Transaction" value={moneyGBP(rangeStats.avgTransactionValue)} icon={Gauge} />}
         </div>
 
         {rangeStats.transactions === 0 ? (
@@ -175,7 +186,9 @@ export function PosAnalytics({
         ) : (
           <>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <RankingTable title="Top 10 Products by Revenue" rows={topByRevenue} valueLabel="Revenue" formatValue={(r) => moneyGBP(r.revenue)} />
+              {showFinance && (
+                <RankingTable title="Top 10 Products by Revenue" rows={topByRevenue} valueLabel="Revenue" formatValue={(r) => moneyGBP(r.revenue)} />
+              )}
               <RankingTable title="Top 10 Products by Units Sold" rows={topByUnits} valueLabel="Units" formatValue={(r) => formatUnits(r.units)} />
             </div>
 
@@ -193,7 +206,7 @@ export function PosAnalytics({
                         <TableRow>
                           <TableHead>Category</TableHead>
                           <TableHead className="text-right">Units</TableHead>
-                          <TableHead className="text-right">Revenue</TableHead>
+                          {showFinance && <TableHead className="text-right">Revenue</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -201,7 +214,7 @@ export function PosAnalytics({
                           <TableRow key={c.categoryExternalId ?? "uncategorized"}>
                             <TableCell className="font-medium">{c.categoryName}</TableCell>
                             <TableCell className="text-right tabular-nums">{formatUnits(c.units)}</TableCell>
-                            <TableCell className="text-right tabular-nums">{moneyGBP(c.revenue)}</TableCell>
+                            {showFinance && <TableCell className="text-right tabular-nums">{moneyGBP(c.revenue)}</TableCell>}
                           </TableRow>
                         ))}
                       </TableBody>

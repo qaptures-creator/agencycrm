@@ -8,7 +8,7 @@ import type { getGoodtillRecentSales } from "@/lib/gym/integrations/goodtill-ana
 
 type RecentSales = Awaited<ReturnType<typeof getGoodtillRecentSales>>;
 
-export function PosRecentSales({ sales }: { sales: RecentSales }) {
+export function PosRecentSales({ sales, showFinance }: { sales: RecentSales; showFinance: boolean }) {
   if (sales.length === 0) {
     return (
       <EmptyState
@@ -28,7 +28,7 @@ export function PosRecentSales({ sales }: { sales: RecentSales }) {
             <TableHead>Items</TableHead>
             <TableHead>Payment</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="text-right">Total</TableHead>
+            {showFinance && <TableHead className="text-right">Total</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -42,7 +42,7 @@ export function PosRecentSales({ sales }: { sales: RecentSales }) {
               <TableCell>
                 <Badge variant={s.orderStatus === "VOIDED" ? "destructive" : "success"}>{s.orderStatus ?? "UNKNOWN"}</Badge>
               </TableCell>
-              <TableCell className="text-right font-medium tabular-nums">{moneyGBP(s.totalIncVat)}</TableCell>
+              {showFinance && <TableCell className="text-right font-medium tabular-nums">{moneyGBP(s.totalIncVat)}</TableCell>}
             </TableRow>
           ))}
         </TableBody>

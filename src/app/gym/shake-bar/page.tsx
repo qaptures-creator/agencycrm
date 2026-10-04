@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireTabAccess } from "@/lib/gym/auth";
+import { can, type GymAccessRole } from "@/lib/gym/permissions";
 import { markNavSectionSeen } from "@/lib/gym/nav-badges";
 import { getGoodtillSyncStatus } from "@/lib/gym/integrations/goodtill-sync";
 import {
@@ -28,6 +29,7 @@ export default async function ShakeBarPage({
 }) {
   const user = await requireTabAccess("/gym/shake-bar");
   markNavSectionSeen(user.id, "/gym/shake-bar");
+  const showFinance = can(user.accessRole as GymAccessRole, "viewFinance");
 
   const { posRange, posFrom, posTo } = await searchParams;
   const range = resolvePosDateRange(posRange, posFrom, posTo);
@@ -77,6 +79,7 @@ export default async function ShakeBarPage({
             categories={categoryBreakdown}
             range={range}
             activeRangeParam={posRange ?? "month"}
+            showFinance={showFinance}
           />
         </TabsContent>
 
@@ -85,7 +88,7 @@ export default async function ShakeBarPage({
         </TabsContent>
 
         <TabsContent value="sales">
-          <PosRecentSales sales={recentSales} />
+          <PosRecentSales sales={recentSales} showFinance={showFinance} />
         </TabsContent>
 
         <TabsContent value="manual">
