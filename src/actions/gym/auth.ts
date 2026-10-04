@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { hashPassword, verifyPassword, generateToken, hashToken, generateTempPassword } from "@/lib/gym/password";
+import { hashPassword, verifyPassword, hashToken, generateTempPassword } from "@/lib/gym/password";
 import { createGymSession, destroyGymSession } from "@/lib/gym/session";
 import { requirePermission, getCurrentGymUser } from "@/lib/gym/auth";
 import { logAudit } from "@/lib/gym/audit";
@@ -47,26 +47,23 @@ export async function logoutAction() {
 
 const requestResetSchema = z.object({ email: z.string().email() });
 
-/** No email provider is connected (see Settings > Integrations > Email), so we
- * can't deliver a reset email. Instead we mint a token and hand the manager a
- * link to pass on securely — same security property, honest about what's wired up. */
-export async function requestPasswordResetAction(
-  _prev: { error?: string; resetLink?: string } | null,
-  formData: FormData
-) {
+/** No email provider is connected (see Settings > Integrations > Email), so
+ * there's no verified channel to deliver a reset link to. A self-service
+ * flow that hands the live link back to whoever submits this form is an
+ * account-takeover hole — it doesn't prove the requester owns that inbox,
+ * only that they know or guessed the email address. Until real email
+ * delivery is wired up, password resets go through an Owner/Manager who is
+ * already authenticated (Staff > Reset Password, requirePermission
+ * "manageStaff") — this action never mints or exposes a token; it only
+ * logs the request (regardless of whether the account exists, so the
+ * response can't be used to probe which emails are registered) so staff
+ * can see it in the audit log and action it from Staff. */
+export async function requestPasswordResetAction(_prev: { submitted?: boolean } | null, formData: FormData) {
   const parsed = requestResetSchema.safeParse({ email: formData.get("email") });
-  if (!parsed.success) return { error: "Enter a valid email address." };
-
-  const user = await prisma.gymUser.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
-  // Always return the same message whether or not the account exists, to avoid leaking which emails are registered.
-  if (!user) return { error: undefined, resetLink: undefined, submitted: true };
-
-  const token = generateToken();
-  await prisma.gymPasswordResetToken.create({
-    data: { userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
-  });
-
-  return { submitted: true, resetLink: `/gym-login/reset?token=${token}` };
+  if (parsed.success) {
+    await logAudit({ action: "PASSWORD_RESET_REQUESTED", entityType: "GymUser", metadata: { email: parsed.data.email.toLowerCase() } });
+  }
+  return { submitted: true };
 }
 
 const resetPasswordSchema = z.object({
