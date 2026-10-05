@@ -55,7 +55,7 @@ export type GymNavItem = {
 export const GYM_NAV_ITEMS: GymNavItem[] = [
   { label: "Dashboard", href: "/gym", icon: LayoutDashboard },
   { label: "Members", href: "/gym/members", icon: Users, group: "members" },
-  { label: "Live Entry", href: "/gym/live-entry", icon: DoorOpen, group: "members" },
+  { label: "Entry", href: "/gym/live-entry", icon: DoorOpen, group: "members" },
   { label: "Memberships", href: "/gym/memberships", icon: IdCard, group: "members" },
   { label: "Finances", href: "/gym/finances", icon: LineChart, group: "money" },
   { label: "Payments", href: "/gym/payments", icon: CreditCard, group: "money" },
