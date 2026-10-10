@@ -8,6 +8,7 @@ import {
   getRevenueByPlan,
   getFailedPayments,
   hasAnyPaymentData,
+  DATE_RANGE_OPTIONS,
   type DateRangeKey,
 } from "@/lib/gym/finance-data";
 import { StatCard } from "@/components/stat-card";
@@ -37,6 +38,7 @@ export default async function FinancesPage({
   const { range: rangeParam, start, end } = await searchParams;
   const range: DateRangeKey = VALID_RANGES.includes(rangeParam as DateRangeKey) ? (rangeParam as DateRangeKey) : "month";
   const resolvedRange = resolveDateRange(range, start, end);
+  const rangeLabel = DATE_RANGE_OPTIONS.find((o) => o.value === range)?.label ?? "Selected Period";
 
   const [hasData, ashbourneConnected, kpis, revenueOverTime, revenueByPlan, failedPayments] = await Promise.all([
     hasAnyPaymentData(),
@@ -79,7 +81,14 @@ export default async function FinancesPage({
         <>
           <DateRangeFilter current={range} start={start} end={end} />
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <StatCard
+              label={`Total Revenue — ${rangeLabel}`}
+              value={moneyGBP(kpis.rangeRevenue)}
+              icon={BarChart3}
+              tone="success"
+              hint={`${kpis.rangePaymentCount} payment${kpis.rangePaymentCount === 1 ? "" : "s"}`}
+            />
             <StatCard label="Revenue This Month" value={moneyGBP(kpis.revenueThisMonth)} icon={Wallet} tone="success" />
             <StatCard label="Revenue Last Month" value={moneyGBP(kpis.revenueLastMonth)} icon={CalendarDays} />
             <StatCard label="Projected Monthly Revenue" value={moneyGBP(kpis.projectedMonthlyRevenue)} icon={TrendingUp} tone="success" />
@@ -110,12 +119,6 @@ export default async function FinancesPage({
               icon={UserMinus}
               tone={kpis.cancelledMembershipValue > 0 ? "warning" : "default"}
               hint="Selected period, monthly-normalized"
-            />
-            <StatCard
-              label="Revenue (Selected Period)"
-              value={moneyGBP(kpis.rangeRevenue)}
-              icon={BarChart3}
-              hint={`${kpis.rangePaymentCount} payment${kpis.rangePaymentCount === 1 ? "" : "s"}`}
             />
           </div>
 
